@@ -36,7 +36,7 @@ export const generateInvoicePDF = async (
     customerName: invoice.customer.name,
     customerAddress: invoice.customer.address,
     customerGST:
-      invoice.customer.gst_number || invoice.customer.gstNumber || 'NA',
+      invoice.customer.gst_number || invoice.customer.gstNumber || 'N/A',
     customerMobile: invoice.customer.mobile,
     placeOfSupply: invoice.customer.address,
 

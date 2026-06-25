@@ -1,0 +1,20 @@
+service: bill-book
+
+frameworkVersion: "4"
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: ap-south-1
+  environment:
+    DATABASE_URL: ${env:DATABASE_URL}
+    JWT_SECRET: ${env:JWT_SECRET}
+
+functions:
+  api:
+    handler: dist/index.handler
+    events:
+      - httpApi: "*"
+
+plugins:
+  - serverless-offline

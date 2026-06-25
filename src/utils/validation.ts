@@ -1,5 +1,7 @@
 import { ProductBaseType, ProductFormErrors } from '../types';
 
+const MAX_PRODUCT_PRICE = 99999999;
+
 export const productValidateForm = (
   formData: ProductBaseType,
   setErrors: (errors: ProductFormErrors) => void,
@@ -15,12 +17,16 @@ export const productValidateForm = (
     newErrors.name = 'Product name is required';
   }
 
-  if (Number.isNaN(mrp) || mrp <= 0) {
+  if (!Number.isFinite(mrp) || mrp <= 0) {
     newErrors.mrp = 'MRP must be greater than 0';
+  } else if (mrp > MAX_PRODUCT_PRICE) {
+    newErrors.mrp = `MRP cannot be greater than ${MAX_PRODUCT_PRICE}`;
   }
 
-  if (Number.isNaN(rate) || rate <= 0) {
+  if (!Number.isFinite(rate) || rate <= 0) {
     newErrors.rate = 'Rate must be greater than 0';
+  } else if (rate > MAX_PRODUCT_PRICE) {
+    newErrors.rate = `Rate cannot be greater than ${MAX_PRODUCT_PRICE}`;
   } else if (rate > mrp) {
     newErrors.rate = 'Rate cannot be greater than MRP';
   }
@@ -29,12 +35,12 @@ export const productValidateForm = (
     newErrors.taxRate = 'Valid tax rate is required';
   }
 
-  if (Number.isNaN(stock) || stock < 0) {
+  if (!Number.isFinite(stock) || stock < 0) {
     newErrors.stock = 'Stock cannot be negative';
   }
 
   if (formData.unitType === 'COMPOUND') {
-    if (Number.isNaN(conversionFactor) || conversionFactor <= 1) {
+    if (!Number.isFinite(conversionFactor) || conversionFactor <= 1) {
       newErrors.conversionFactor = 'Conversion factor must be greater than 1';
     }
 
@@ -50,7 +56,7 @@ export const productValidateForm = (
       newErrors.unit = 'Unit and base unit cannot be the same';
     }
 
-    if (stock * conversionFactor < 1) {
+    if (stock > 0 && stock * conversionFactor < 1) {
       newErrors.stock = `Stock too small for base unit conversion`;
     }
   }

@@ -4,16 +4,13 @@ import { Card, Chip, IconButton, Text } from 'react-native-paper'
 import { formTypeEnum, ProductType } from '../../types'
 import { useNavigation } from '@react-navigation/native'
 import { ProductListScreenNavigationProp } from '../../screens/Inventory/ProductListScreen'
-import { simpleToCompound } from '../../utils/helper'
+import { formatProductStock } from '../../utils/helper'
 
 const ProductCard = ({ item }: { item: ProductType }) => {
     const isLowStock = item.minStock && Number.parseFloat(item.stock) <= item.minStock
     const navigation = useNavigation<ProductListScreenNavigationProp>()
 
-    const displayStock =
-        item.unitType === "COMPOUND"
-            ? `${simpleToCompound(item.stock, item.conversionFactor)} ${item.unit} | ${item.stock} ${item.baseUnit}`
-            : `${item.stock} ${item.baseUnit}`;
+    const displayStock = formatProductStock(item);
 
     return (
         <Card

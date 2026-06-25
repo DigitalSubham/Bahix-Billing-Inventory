@@ -147,19 +147,19 @@ export const InvoicePreviewScreen: React.FC<InvoicePreviewProps> = ({
                         <View style={styles.detailRow}>
                             <Text variant="bodyMedium">Invoice No:</Text>
                             <Text variant="bodyMedium" style={[styles.detailValue, styles.highlight]}>
-                                {invoice?.invoiceNumber || "NA"}
+                                {invoice?.invoiceNumber || "N/A"}
                             </Text>
                         </View>
                         <View style={styles.detailRow}>
                             <Text variant="bodyMedium">Invoice Date:</Text>
                             <Text variant="bodyMedium" style={styles.detailValue}>
-                                {formatDate(invoice.invoiceDate) || "NA"}
+                                {formatDate(invoice.invoiceDate) || "N/A"}
                             </Text>
                         </View>
                         <View style={styles.detailRow}>
                             <Text variant="bodyMedium">Due Date:</Text>
                             <Text variant="bodyMedium" style={styles.detailValue}>
-                                {formatDate(invoice.dueDate) || "NA"}
+                                {formatDate(invoice.dueDate) || "N/A"}
                             </Text>
                         </View>
                     </Card.Content>
@@ -171,17 +171,17 @@ export const InvoicePreviewScreen: React.FC<InvoicePreviewProps> = ({
                         <Text variant="titleMedium" style={styles.sectionTitle}>
                             BILL TO
                         </Text>
-                        <Text variant="bodyLarge">name: {invoice.customer.name}</Text>
+                        <Text variant="bodyLarge">Name: {invoice.customer.name}</Text>
                         {!!invoice.customer.address && (
                             <Text variant="bodySmall" style={styles.customerInfo}>
-                                address:  {invoice.customer.address || "NA"}
+                                address:  {invoice.customer.address || "N/A"}
                             </Text>
                         )}
                         <Text variant="bodySmall" style={styles.customerInfo}>
-                            Mobile: {invoice.customer.mobile || "NA"}
+                            Mobile: {invoice.customer.mobile || "N/A"}
                         </Text>
                         <Text variant="bodySmall" style={styles.customerInfo}>
-                            GSTIN: {invoice.customer.gst_number || invoice.customer.gstNumber || "NA"}
+                            GSTIN: {invoice.customer.gst_number || invoice.customer.gstNumber || "N/A"}
                         </Text>
                     </Card.Content>
                 </Card>
@@ -242,7 +242,7 @@ export const InvoicePreviewScreen: React.FC<InvoicePreviewProps> = ({
                         </View>
                         {(invoice?.discountAmount ?? 0) > 0 && (
                             <View style={styles.totalRow}>
-                                <Text variant="bodyMedium">discount ({invoice.discountType === 'PERCENTAGE' ? '%' : '₹'})</Text>
+                                <Text variant="bodyMedium">Discount ({invoice.discountType === 'PERCENTAGE' ? '%' : '₹'})</Text>
                                 <Text variant="bodyMedium">₹{Number(invoice?.discountAmount || 0).toFixed(2)}</Text>
                             </View>
                         )}

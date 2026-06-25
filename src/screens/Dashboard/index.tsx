@@ -1,5 +1,4 @@
 import type React from "react"
-import { useState } from "react"
 import { View, StyleSheet, ScrollView, RefreshControl } from "react-native"
 import { Card, Text, Avatar } from "react-native-paper"
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack"
@@ -14,16 +13,30 @@ interface Props {
     navigation: DashboardScreenNavigationProp
 }
 
-const DashboardScreen: React.FC<Props> = ({ navigation }) => {
-    const [stats] = useState<DashboardStats>({
-        totalSales: 0,
-        totalInvoices: 0,
-        pendingAmount: 0,
-        lowStockItems: 0,
-        todaySales: 0,
-        monthSales: 0,
-    })
+type ApiDashboardStats = {
+    totalRevenue?: number | null
+    revenueToday?: number | null
+    revenueLast7Days?: number | null
+    revenueLast30Days?: number | null
+    totalInvoices?: number | null
+    invoicesToday?: number | null
+    totalProducts?: number | null
+    totalCustomers?: number | null
+}
 
+const emptyStats: DashboardStats = {
+    totalSales: 0,
+    totalInvoices: 0,
+    pendingAmount: 0,
+    lowStockItems: 0,
+    todaySales: 0,
+    monthSales: 0,
+}
+
+const numberOrZero = (value?: number | null) =>
+    typeof value === "number" && Number.isFinite(value) ? value : 0
+
+const DashboardScreen: React.FC<Props> = ({ navigation }) => {
     const { data: business } = useQuery({
         queryKey: ['business'],
         queryFn: getProfileApi,
@@ -33,6 +46,17 @@ const DashboardScreen: React.FC<Props> = ({ navigation }) => {
         queryFn: dashboardStats,
     })
 
+    const stats = emptyStats
+    const safeDashboardData: Record<keyof ApiDashboardStats, number> = {
+        totalRevenue: numberOrZero(dashboardData?.totalRevenue),
+        revenueToday: numberOrZero(dashboardData?.revenueToday),
+        revenueLast7Days: numberOrZero(dashboardData?.revenueLast7Days),
+        revenueLast30Days: numberOrZero(dashboardData?.revenueLast30Days),
+        totalInvoices: numberOrZero(dashboardData?.totalInvoices),
+        invoicesToday: numberOrZero(dashboardData?.invoicesToday),
+        totalProducts: numberOrZero(dashboardData?.totalProducts),
+        totalCustomers: numberOrZero(dashboardData?.totalCustomers),
+    }
 
     return (
         <View style={styles.container}>
@@ -66,13 +90,13 @@ const DashboardScreen: React.FC<Props> = ({ navigation }) => {
                             <View style={styles.overviewChip}>
                                 <Text style={styles.overviewChipLabel}>Today revenue</Text>
                                 <Text style={styles.overviewChipValue}>
-                                    ₹{(dashboardData?.revenueToday / 1000)?.toFixed(1) || 0}K
+                                    ₹{(safeDashboardData.revenueToday / 1000).toFixed(1)}K
                                 </Text>
                             </View>
                             <View style={styles.overviewChip}>
                                 <Text style={styles.overviewChipLabel}>Customers</Text>
                                 <Text style={styles.overviewChipValue}>
-                                    {dashboardData?.totalCustomers || 0}
+                                    {safeDashboardData.totalCustomers}
                                 </Text>
                             </View>
                         </View>
@@ -86,7 +110,7 @@ const DashboardScreen: React.FC<Props> = ({ navigation }) => {
                                 <Text style={styles.primaryStatLabel}>Total Sales</Text>
                                 <Avatar.Icon size={40} icon="currency-inr" style={styles.primaryIconOverlay} />
                             </View>
-                            <Text style={styles.primaryStatValue}>₹{(dashboardData?.totalRevenue / 100000)?.toFixed(1) || 0}L</Text>
+                            <Text style={styles.primaryStatValue}>₹{(safeDashboardData.totalRevenue / 100000).toFixed(1)}L</Text>
                             <Text style={styles.primaryStatSubtext}>All time revenue</Text>
                         </Card.Content>
                     </Card>
@@ -97,7 +121,7 @@ const DashboardScreen: React.FC<Props> = ({ navigation }) => {
                                 <Text style={styles.primaryStatLabel}>Invoices</Text>
                                 <Avatar.Icon size={40} icon="file-document" style={styles.primaryIconOverlay} />
                             </View>
-                            <Text style={styles.primaryStatValue}>{dashboardData?.totalInvoices || 0}</Text>
+                            <Text style={styles.primaryStatValue}>{safeDashboardData.totalInvoices}</Text>
                             <Text style={styles.primaryStatSubtext}>Total created</Text>
                         </Card.Content>
                     </Card>
@@ -130,7 +154,7 @@ const DashboardScreen: React.FC<Props> = ({ navigation }) => {
                                 <Text style={{ fontSize: 20 }}>📈</Text>
                             </View>
                             <Text style={styles.secondaryLabel}>Today</Text>
-                            <Text style={styles.secondaryValue}>₹{(dashboardData?.revenueToday / 1000)?.toFixed(1)}K</Text>
+                            <Text style={styles.secondaryValue}>₹{(safeDashboardData.revenueToday / 1000).toFixed(1)}K</Text>
                         </Card.Content>
                     </Card>
                 </View>
@@ -142,7 +166,7 @@ const DashboardScreen: React.FC<Props> = ({ navigation }) => {
                                 <Text style={{ fontSize: 20 }}>📦</Text>
                             </View>
                             <Text style={styles.monthLabel}>This Week</Text>
-                            <Text style={styles.monthValue}>₹{(dashboardData?.revenueLast7Days / 100000)?.toFixed(1) || 0}L</Text>
+                            <Text style={styles.monthValue}>₹{(safeDashboardData.revenueLast7Days / 100000).toFixed(1)}L</Text>
                         </Card.Content>
                     </Card>
                     <Card style={styles.secondaryCard}>
@@ -151,7 +175,7 @@ const DashboardScreen: React.FC<Props> = ({ navigation }) => {
                                 <Text style={{ fontSize: 20 }}>📈</Text>
                             </View>
                             <Text style={styles.monthLabel}>This Month</Text>
-                            <Text style={styles.monthValue}>₹{(dashboardData?.revenueLast30Days / 100000)?.toFixed(1) || 0}L</Text>
+                            <Text style={styles.monthValue}>₹{(safeDashboardData.revenueLast30Days / 100000).toFixed(1)}L</Text>
                         </Card.Content>
                     </Card>
                     <Card style={styles.secondaryCard}>
@@ -160,7 +184,7 @@ const DashboardScreen: React.FC<Props> = ({ navigation }) => {
                                 <Avatar.Icon size={40} icon="file-document" style={styles.primaryIconOverlay} />
                             </View>
                             <Text style={styles.monthLabel}>Today Invoices </Text>
-                            <Text style={styles.monthValue}>{dashboardData?.invoicesToday || 0}</Text>
+                            <Text style={styles.monthValue}>{safeDashboardData.invoicesToday}</Text>
                         </Card.Content>
                     </Card>
                 </View>
@@ -179,7 +203,7 @@ const DashboardScreen: React.FC<Props> = ({ navigation }) => {
                             <View style={styles.actionIconBg}>
                                 <Text style={styles.actionEmoji}>📝</Text>
                             </View>
-                            <Text style={styles.actionLabelModern}>Invoices ({dashboardData?.totalInvoices || 0}) </Text>
+                            <Text style={styles.actionLabelModern}>Invoices ({safeDashboardData.totalInvoices}) </Text>
                         </Card.Content>
                     </Card>
 
@@ -191,7 +215,7 @@ const DashboardScreen: React.FC<Props> = ({ navigation }) => {
                             <View style={styles.actionIconBg}>
                                 <Text style={styles.actionEmoji}>📦</Text>
                             </View>
-                            <Text style={styles.actionLabelModern}>Products ({dashboardData?.totalProducts || 0})</Text>
+                            <Text style={styles.actionLabelModern}>Products ({safeDashboardData.totalProducts})</Text>
                         </Card.Content>
                     </Card>
 
@@ -204,7 +228,7 @@ const DashboardScreen: React.FC<Props> = ({ navigation }) => {
                             <View style={styles.actionIconBg}>
                                 <Text style={styles.actionEmoji}>👥</Text>
                             </View>
-                            <Text style={styles.actionLabelModern}>Customers ({dashboardData?.totalCustomers || 0})</Text>
+                            <Text style={styles.actionLabelModern}>Customers ({safeDashboardData.totalCustomers})</Text>
                         </Card.Content>
                     </Card>
                 </View>

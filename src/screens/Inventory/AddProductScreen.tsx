@@ -5,6 +5,8 @@ import {
     StyleSheet,
     ScrollView,
     Alert,
+    KeyboardAvoidingView,
+    Platform,
 } from 'react-native';
 import {
     TextInput,
@@ -17,7 +19,7 @@ import {
 } from 'react-native-paper';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList, ProductType, ProductBaseType, formTypeEnum, ProductFormErrors } from '../../types';
-import { createProduct, fetchProductById, updateProduct } from '../../apis/productApis';
+import { createProduct, deleteProduct, fetchProductById, updateProduct } from '../../apis/productApis';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { errorToast, successToast } from '../../utils/toast';
 import AppDropdownPicker from '../../components/common/Dropdown';
@@ -36,6 +38,27 @@ interface Props {
     }
 }
 
+const PRICE_MAX_DIGITS = 8;
+const DECIMAL_MAX_DIGITS = 2;
+
+const sanitizeDecimalInput = (value: string, maxWholeDigits?: number) => {
+    const normalized = value.replace(/,/g, '').replace(/[^\d.]/g, '');
+    const [whole = '', ...decimalParts] = normalized.split('.');
+    const trimmedWhole = maxWholeDigits ? whole.slice(0, maxWholeDigits) : whole;
+    const decimal = decimalParts.join('').slice(0, DECIMAL_MAX_DIGITS);
+
+    return decimalParts.length > 0 ? `${trimmedWhole}.${decimal}` : trimmedWhole;
+};
+
+const isProductQueryKey = (queryKey: readonly unknown[]) => {
+    const [scope] = queryKey;
+    return (
+        scope === "products" ||
+        scope === "products-search" ||
+        scope === "invoice-products" ||
+        scope === "invoice-products-search"
+    );
+};
 
 const AddProductScreen: React.FC<Props> = ({ navigation, route }) => {
     const isEditMode = route?.params?.productId !== undefined;
@@ -65,10 +88,13 @@ const AddProductScreen: React.FC<Props> = ({ navigation, route }) => {
         unitType: 'SIMPLE',
     });
 
-    console.log("formData", formData)
-
     const [errors, setErrors] = useState<ProductFormErrors>({});
     const queryClient = useQueryClient();
+
+    const invalidateProductQueries = () =>
+        queryClient.invalidateQueries({
+            predicate: query => isProductQueryKey(query.queryKey),
+        });
 
 
     const createProductMutation = useMutation({
@@ -87,9 +113,7 @@ const AddProductScreen: React.FC<Props> = ({ navigation, route }) => {
             unit_type: product.unitType,
         }),
         onSuccess: () => {
-            queryClient.invalidateQueries({
-                queryKey: ["products"],
-            });
+            invalidateProductQueries();
 
         },
     });
@@ -116,7 +140,15 @@ const AddProductScreen: React.FC<Props> = ({ navigation, route }) => {
             );
 
             // refresh product list
-            queryClient.invalidateQueries({ queryKey: ["products"] });
+            invalidateProductQueries();
+        },
+    });
+
+    const deleteProductMutation = useMutation({
+        mutationFn: (id: string) => deleteProduct(id),
+        onSuccess: () => {
+            queryClient.removeQueries({ queryKey: ["product", productId] });
+            invalidateProductQueries();
         },
     });
 
@@ -127,20 +159,20 @@ const AddProductScreen: React.FC<Props> = ({ navigation, route }) => {
                 name: existingProduct?.name,
                 description: existingProduct.description || '',
                 mrp: existingProduct.mrp,
-                rate: existingProduct.selling_rate,
-                taxRate: existingProduct.tax_percent,
+                rate: existingProduct.rate,
+                taxRate: existingProduct.taxRate,
                 unit: existingProduct.unit,
                 stock:
-                    existingProduct.unit_type === "COMPOUND" ?
-                        simpleToCompound(existingProduct.stock, existingProduct.conversion_factor)
+                    existingProduct.unitType === "COMPOUND" ?
+                        simpleToCompound(existingProduct.stock, existingProduct.conversionFactor)
                         : existingProduct.stock,
-                minStock: existingProduct.minStock || '10',
+                minStock: Number(existingProduct.minStock) || 10,
                 category: existingProduct.category || 'General',
                 barcode: existingProduct.barcode || '',
                 hsnCode: existingProduct.hsnCode || '',
-                baseUnit: existingProduct.baseUnit || 'PCS',
-                conversionFactor: existingProduct.conversionFactor || 1,
-                unitType: existingProduct.unit_type || 'SIMPLE',
+                baseUnit: existingProduct.baseUnit || existingProduct.unit || 'PCS',
+                conversionFactor: String(existingProduct.conversionFactor || '1'),
+                unitType: existingProduct.unitType || 'SIMPLE',
             });
         }
     }, [isEditMode, existingProduct]);
@@ -155,6 +187,9 @@ const AddProductScreen: React.FC<Props> = ({ navigation, route }) => {
     const calculateProfit = (): string => {
         const mrp = Number.parseFloat(formData.mrp) || 0;
         const rate = Number.parseFloat(formData.rate) || 0;
+        if (!Number.isFinite(mrp) || !Number.isFinite(rate)) {
+            return '₹0.00 (0.00%)';
+        }
         const profit = mrp - rate;
         const profitPercentage = mrp > 0 ? ((profit / mrp) * 100)?.toFixed(2) : '0';
         return `₹${profit?.toFixed(2)} (${profitPercentage}%)`;
@@ -165,6 +200,9 @@ const AddProductScreen: React.FC<Props> = ({ navigation, route }) => {
             return;
         }
 
+        const productUnit =
+            formData.unitType === "COMPOUND" ? formData.unit : formData.baseUnit;
+
         const productData = {
             id: isEditMode ? productId! : Date.now().toString(),
             name: formData.name.trim(),
@@ -173,7 +211,7 @@ const AddProductScreen: React.FC<Props> = ({ navigation, route }) => {
             category: formData.category,
             rate: formData.rate,
             taxRate: formData.taxRate,
-            unit: formData.unit,
+            unit: productUnit,
             stock: formData.unitType === "COMPOUND" ? compoundToSimple(formData.stock, formData.conversionFactor) : formData.stock, // store in base unit
             minStock: formData.minStock || undefined,
             baseUnit: formData.baseUnit,
@@ -207,7 +245,7 @@ const AddProductScreen: React.FC<Props> = ({ navigation, route }) => {
                         category: 'General',
                         barcode: '',
                         hsnCode: '',
-                        baseUnit: '',
+                        baseUnit: 'PCS',
                         conversionFactor: "1",
                         unitType: 'SIMPLE',
                     });
@@ -232,7 +270,19 @@ const AddProductScreen: React.FC<Props> = ({ navigation, route }) => {
                     text: 'Delete',
                     style: 'destructive',
                     onPress: () => {
-                        navigation.goBack();
+                        if (!productId) {
+                            return;
+                        }
+
+                        deleteProductMutation.mutate(productId, {
+                            onSuccess: () => {
+                                successToast("Product deleted successfully")
+                                navigation.goBack();
+                            },
+                            onError: (err: any) => {
+                                errorToast(err.message || 'Failed to delete product')
+                            },
+                        });
                     },
                 },
             ]
@@ -240,28 +290,42 @@ const AddProductScreen: React.FC<Props> = ({ navigation, route }) => {
     };
 
     const updateFormData = (field: keyof ProductBaseType, value: any) => {
+        const nextValue =
+            field === "mrp" || field === "rate"
+                ? sanitizeDecimalInput(String(value), PRICE_MAX_DIGITS)
+                : field === "stock" || field === "minStock" || field === "conversionFactor"
+                    ? sanitizeDecimalInput(String(value))
+                    : value;
+
         if (field === "conversionFactor" && formData.unitType === "COMPOUND") {
             const simpleStock = Number.parseFloat(formData.stock) || 0;
-            const newCompoundStock = simpleStock / Number.parseFloat(value);
+            const conversionFactor = Number.parseFloat(nextValue) || 1;
+            const newCompoundStock = simpleStock / conversionFactor;
             setFormData(prev => ({
                 ...prev,
                 stock: String(newCompoundStock),
-                [field]: value,
+                [field]: nextValue,
             }));
 
         } else {
             setFormData(prev => ({
                 ...prev,
-                [field]: value,
+                [field]: nextValue,
             }));
         }
     };
 
-    console.log("error", errors, formData, existingProduct)
-
     return (
-        <View style={styles.container}>
-            <ScrollView>
+        <KeyboardAvoidingView
+            style={styles.container}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
+        >
+            <ScrollView
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+            >
                 {/* Basic Information */}
                 <Card style={styles.card}>
                     <Card.Content>
@@ -322,6 +386,7 @@ const AddProductScreen: React.FC<Props> = ({ navigation, route }) => {
                                     onChangeText={(text) => updateFormData('mrp', text)}
                                     mode="outlined"
                                     keyboardType="decimal-pad"
+                                    maxLength={PRICE_MAX_DIGITS + DECIMAL_MAX_DIGITS + 1}
                                     style={styles.input}
                                     error={!!errors.mrp}
                                     left={<TextInput.Affix text="₹" />}
@@ -340,6 +405,7 @@ const AddProductScreen: React.FC<Props> = ({ navigation, route }) => {
                                     onChangeText={(text) => updateFormData('rate', text)}
                                     mode="outlined"
                                     keyboardType="decimal-pad"
+                                    maxLength={PRICE_MAX_DIGITS + DECIMAL_MAX_DIGITS + 1}
                                     style={styles.input}
                                     error={!!errors.rate}
                                     left={<TextInput.Affix text="₹" />}
@@ -543,13 +609,18 @@ const AddProductScreen: React.FC<Props> = ({ navigation, route }) => {
                     <Button
                         mode="outlined"
                         onPress={() => navigation.goBack()}
+                        rippleColor="rgba(74, 32, 144, 0.12)"
+                        textColor="#4a2090"
                         style={styles.button}>
                         Cancel
                     </Button>
                     <Button
                         mode="contained"
                         loading={createProductMutation.isPending || updateProductMutation.isPending}
+                        disabled={createProductMutation.isPending || updateProductMutation.isPending}
                         onPress={handleSubmit}
+                        buttonColor="#4a2090"
+                        rippleColor="rgba(255, 255, 255, 0.28)"
                         style={styles.button}
                         icon="content-save">
                         {isEditMode ? 'Update' : 'Save'}
@@ -561,7 +632,10 @@ const AddProductScreen: React.FC<Props> = ({ navigation, route }) => {
                         <Button
                             mode="text"
                             onPress={handleDelete}
+                            loading={deleteProductMutation.isPending}
+                            disabled={deleteProductMutation.isPending}
                             textColor="#f44336"
+                            rippleColor="rgba(244, 67, 54, 0.12)"
                             icon="delete">
                             Delete Product
                         </Button>
@@ -570,7 +644,7 @@ const AddProductScreen: React.FC<Props> = ({ navigation, route }) => {
 
                 <View style={styles.bottomSpace} />
             </ScrollView>
-        </View>
+        </KeyboardAvoidingView>
     );
 };
 
@@ -578,6 +652,9 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#f5f5f5',
+    },
+    scrollContent: {
+        paddingBottom: 36,
     },
     card: {
         margin: 12,
@@ -636,6 +713,7 @@ const styles = StyleSheet.create({
     button: {
         flex: 1,
         paddingVertical: 6,
+        borderRadius: 10,
     },
     deleteContainer: {
         alignItems: 'center',

@@ -28,7 +28,10 @@ const ProductsStack = () => {
       <Stack.Screen
         name="ProductForm"
         component={AddProductScreen}
-        options={buildHeaderOptions({ title: 'Add Product' })}
+        options={({ route }) =>
+          buildHeaderOptions({
+            title: route.params?.formType === formTypeEnum.EDIT ? 'Edit Product' : 'Add Product',
+          })}
       />
     </Stack.Navigator>
   );

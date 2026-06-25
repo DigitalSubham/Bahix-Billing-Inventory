@@ -8,6 +8,7 @@ import {
     ScrollView,
     Alert,
     Image,
+    useWindowDimensions,
 } from 'react-native';
 import {
     TextInput,
@@ -21,9 +22,11 @@ import { useLoginEmail } from '../../hooks/useAuth';
 const appLogo = require('../../assests/logo.png');
 
 const LoginScreen = ({ navigation }: any) => {
+    const { height } = useWindowDimensions();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const emailLoginMutation = useLoginEmail();
+    const isShortScreen = height < 720;
 
     const handleEmailLogin = () => {
         if (!email || !password) {
@@ -40,13 +43,16 @@ const LoginScreen = ({ navigation }: any) => {
 
     return (
         <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             keyboardVerticalOffset={Platform.OS === 'ios' ? 24 : 0}
             style={styles.container}>
             <View style={styles.blobTop} />
             <View style={styles.blobBottom} />
             <ScrollView
-                contentContainerStyle={styles.scrollContent}
+                contentContainerStyle={[
+                    styles.scrollContent,
+                    isShortScreen && styles.scrollContentCompact,
+                ]}
                 keyboardShouldPersistTaps="handled"
                 keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
                 showsVerticalScrollIndicator={false}>
@@ -77,18 +83,22 @@ const LoginScreen = ({ navigation }: any) => {
                             onChangeText={setEmail}
                             keyboardType="email-address"
                             autoCapitalize="none"
+                            returnKeyType="next"
                             style={styles.input}
                             mode="outlined"
                             outlineStyle={styles.inputOutline}
+                            textColor="#24153D"
                         />
                         <TextInput
                             label="Password"
                             value={password}
                             onChangeText={setPassword}
                             secureTextEntry
+                            returnKeyType="done"
                             style={styles.input}
                             mode="outlined"
                             outlineStyle={styles.inputOutline}
+                            textColor="#24153D"
                         />
                         <Button
                             mode="contained"
@@ -126,7 +136,12 @@ const styles = StyleSheet.create({
         flexGrow: 1,
         justifyContent: 'center',
         paddingHorizontal: 20,
-        paddingVertical: 28,
+        paddingTop: 28,
+        paddingBottom: 56,
+    },
+    scrollContentCompact: {
+        justifyContent: 'flex-start',
+        paddingTop: 18,
     },
     content: {
         flex: 1,

@@ -29,7 +29,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { CustomerType, DatePickerType, formTypeEnum, InvoiceBase, InvoiceForm, InvoiceItem, ProductType, RootStackParamList } from '../../types';
 import { fetchProductsPage } from '../../apis/productApis';
 import { fetchCustomersPage } from '../../apis/customerApis';
-import { simpleToCompound } from '../../utils/helper';
+import { formatProductStock } from '../../utils/helper';
 import { usePaginatedListQuery } from '../../hooks/usePaginatedListQuery';
 import PaginationFooter from '../../components/common/PaginationFooter';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
@@ -413,6 +413,16 @@ const CreateInvoiceScreen: React.FC<Props> = ({ navigation }) => {
 
 
   const totals = calculateInvoiceTotals(items, form.discount, form.discountType);
+  const isDueDateBeforeInvoiceDate = () => {
+    const invoiceDate = new Date(form.invoiceDate);
+    const dueDate = new Date(form.dueDate);
+
+    invoiceDate.setHours(0, 0, 0, 0);
+    dueDate.setHours(0, 0, 0, 0);
+
+    return dueDate < invoiceDate;
+  };
+
   const handlePreviewInvoice = () => {
     if (!customer) {
       Alert.alert('Error', 'Please select a customer');
@@ -421,6 +431,11 @@ const CreateInvoiceScreen: React.FC<Props> = ({ navigation }) => {
 
     if (items.length === 0) {
       Alert.alert('Error', 'Please add at least one product');
+      return;
+    }
+
+    if (isDueDateBeforeInvoiceDate()) {
+      Alert.alert('Invalid Due Date', 'Due date cannot be before invoice date');
       return;
     }
 
@@ -750,7 +765,7 @@ const CreateInvoiceScreen: React.FC<Props> = ({ navigation }) => {
               </View>
               {totals.discountAmount > 0 && (
                 <View style={styles.totalRow}>
-                  <Text variant="bodyMedium">discount ({form.discountType === 'PERCENTAGE' ? '%' : '₹'})</Text>
+                  <Text variant="bodyMedium">Discount ({form.discountType === 'PERCENTAGE' ? '%' : '₹'})</Text>
                   <Text variant="bodyMedium">₹{totals.discountAmount?.toFixed(2)}</Text>
                 </View>
               )}
@@ -863,10 +878,7 @@ const CreateInvoiceScreen: React.FC<Props> = ({ navigation }) => {
             keyExtractor={(item, index) => item.id || `product-${index}`}
             style={styles.modalScroll}
             renderItem={({ item }) => {
-              const displayStock =
-                item.unitType === "COMPOUND"
-                  ? `${simpleToCompound(item.stock, item.conversionFactor)} ${item.unit} | ${item.stock} ${item.baseUnit}`
-                  : `${item.stock} ${item.baseUnit}`;
+              const displayStock = formatProductStock(item);
               const description = `Rate: ₹${item.rate} | Stock: ${displayStock}`;
 
               return (
@@ -908,10 +920,12 @@ const CreateInvoiceScreen: React.FC<Props> = ({ navigation }) => {
         open={showDatePicker}
         date={datePickerType === 'invoice' ? form.invoiceDate : form.dueDate}
         mode="date"
+        minimumDate={datePickerType === 'due' ? form.invoiceDate : undefined}
         onConfirm={date => {
           setShowDatePicker(false);
           if (datePickerType === 'invoice') {
-            setForm({ ...form, invoiceDate: date });
+            const nextDueDate = form.dueDate < date ? date : form.dueDate;
+            setForm({ ...form, invoiceDate: date, dueDate: nextDueDate });
           } else {
             setForm({ ...form, dueDate: date });
           }

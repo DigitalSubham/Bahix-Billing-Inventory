@@ -5,6 +5,8 @@ import React, {
   useMemo,
   useState,
 } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { setSessionExpiredHandler } from '../apis/axiosInstance';
 import { getToken, removeToken, saveToken } from '../utils/storage';
 
 type AuthContextValue = {
@@ -17,6 +19,7 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+  const queryClient = useQueryClient();
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -35,6 +38,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     loadStoredToken();
   }, []);
+
+  useEffect(() => {
+    setSessionExpiredHandler(() => {
+      removeToken().finally(() => {
+        setToken(null);
+        setLoading(false);
+        queryClient.clear();
+      });
+    });
+
+    return () => setSessionExpiredHandler(null);
+  }, [queryClient]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

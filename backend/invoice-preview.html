@@ -1,0 +1,399 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Invoice</title>
+
+<style>
+@page { size: A4; margin: 10mm 10mm 12mm 10mm; }
+body { font-family: Arial, Helvetica, sans-serif; font-size: 10.5px; line-height: 1.25; color: #000; margin: 0; padding: 0; }
+.container { padding: 4px; }
+
+.company { font-size: 15px; font-weight: 700; text-transform: uppercase; margin: 0; }
+.comp-address { font-size: 10px; line-height: 1.3; margin-top: 2px; }
+.addr-row { margin-top: 2px; }
+.value { margin-right: 0px; }
+.sep { margin: 0 2px; color: #000; }
+
+.header-row { display: flex; justify-content: space-between; align-items: flex-start; }
+.invoice-title-right { font-weight: 700; font-size: 12px; text-transform: uppercase; text-align: right; white-space: nowrap; }
+
+.box { border: 1px solid #000; padding: 5px; font-size: 10.5px; line-height: 1.25; }
+.two-cols { display: flex; gap: 6px; margin-top: 4px; }
+.col { flex: 1; }
+
+table.items { width: 100%; border-collapse: collapse; margin-top: 6px; table-layout: fixed; font-size: 10.5px; }
+table.items th, table.items td { border: 1px solid #000; padding: 3px 4px; }
+table.items th { background: #f2f2f2; font-weight: 700; }
+
+thead { display: table-header-group; }
+tr { page-break-inside: avoid; }
+
+.c-sno { width: 5%; }
+.c-item { width: 43%; }
+.c-qty { width: 7%; text-align: center; }
+.c-mrp, .c-rate, .c-tax, .c-amt { width: 11%; text-align: right; }
+
+.section-safe { page-break-inside: avoid; }
+
+.bank { width: 100%; padding: 6px 0; font-size: 10.5px; margin-top: 6px; page-break-inside: avoid; }
+.bank-flex { display: grid; grid-template-columns: 0.7fr 0.95fr; gap: 12px; }
+.bank-left { padding-right: 10px; display: flex; justify-content: space-between; gap: 10px; }
+.qr img { width: 80px; height: 80px; }
+
+.amount-box { margin-right: 4px; padding-right: 10px; text-align: right; line-height: 1.3; }
+.amount-row { margin-top: 2px; }
+.amount-row .label { font-weight: 700; margin-right: 4px; }
+.amount-row.total { margin-top: 4px; font-weight: 700; }
+
+.bank-title { font-weight: 700; font-size: 11px; margin-bottom: 3px; text-transform: uppercase; }
+.bank-row { margin-top: 2px; }
+
+.subtotal { margin-top: 8px; text-align: right; font-size: 10.5px; padding-right: 10px; }
+.clear { clear: both; }
+
+.total-words { margin-top: 6px; font-weight: 700; text-align: right; margin-right: 14px; }
+.label {
+  font-weight: 700;
+}
+
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<div class="header-row">
+  <div>
+    <div class="company">Sita Dairy</div>
+    <div class="comp-address">
+      <div class="addr-row">Main Road, Patna</div>
+      <div class="addr-row">
+        <span class="label">Mob:</span> 9999999999
+        <span class="sep">|</span>
+        <span class="label">Email:</span> info@sitadairy.com
+      </div>
+      <div class="addr-row">
+        <span class="label">GSTIN:</span> 10ABCDE1234F1Z5
+        <span class="sep">|</span>
+        <span class="label">PAN:</span> ABCDE1234F
+      </div>
+    </div>
+  </div>
+  <div class="invoice-title-right">
+  TAX INVOICE
+  
+  <div style="padding-top:20px;">
+  <b>No:</b> INV-015-200000 &nbsp;
+  <b>Date:</b> 07/01/2026 &nbsp;
+  <b>Due:</b> 07/01/2026
+</div>
+  </div>
+</div>
+
+
+
+
+<div class="two-cols">
+  <div class="col">
+    <div class="box">
+      <b>BILL TO</b><br/>
+      Rahul Traders<br/>
+      09ABCDE1234F1Z5<br/>
+      Exhibition Road, Patna, Bihar<br/>
+      Mob: 9876543210<br/>
+      POS: Bihar
+    </div>
+  </div>
+  <div class="col">
+    <div class="box">
+      <b>SHIP TO</b><br/>
+      Rahul Traders<br/>
+      Exhibition Road, Patna, Bihar
+    </div>
+  </div>
+</div>
+
+<table class="items">
+<thead>
+<tr>
+  <th class="c-sno">#</th>
+  <th class="c-item">ITEM</th>
+  <th class="c-qty">QTY</th>
+  <th class="c-mrp">MRP</th>
+  <th class="c-rate">RATE</th>
+  <th class="c-tax">TAX</th>
+  <th class="c-amt">AMOUNT</th>
+</tr>
+</thead>
+<tbody>
+
+          
+          <tr>
+            <td>1</td>
+            <td>Milk Product 1</td>
+            <td class="c-qty">2</td>
+            <td>₹100.00</td>
+            <td>₹90.00</td>
+            <td>5%<br/>₹4.50</td>
+            <td>₹94.50</td>
+          </tr>
+        
+          
+          <tr>
+            <td>2</td>
+            <td>Milk Product 2</td>
+            <td class="c-qty">2</td>
+            <td>₹105.00</td>
+            <td>₹95.00</td>
+            <td>5%<br/>₹4.75</td>
+            <td>₹99.75</td>
+          </tr>
+        
+          
+          <tr>
+            <td>3</td>
+            <td>Milk Product 3</td>
+            <td class="c-qty">2</td>
+            <td>₹110.00</td>
+            <td>₹100.00</td>
+            <td>5%<br/>₹5.00</td>
+            <td>₹105.00</td>
+          </tr>
+        
+          
+          <tr>
+            <td>4</td>
+            <td>Milk Product 4</td>
+            <td class="c-qty">2</td>
+            <td>₹115.00</td>
+            <td>₹105.00</td>
+            <td>5%<br/>₹5.25</td>
+            <td>₹110.25</td>
+          </tr>
+        
+          
+          <tr>
+            <td>5</td>
+            <td>Milk Product 5</td>
+            <td class="c-qty">2</td>
+            <td>₹120.00</td>
+            <td>₹110.00</td>
+            <td>5%<br/>₹5.50</td>
+            <td>₹115.50</td>
+          </tr>
+        
+          
+          <tr>
+            <td>6</td>
+            <td>Milk Product 6</td>
+            <td class="c-qty">2</td>
+            <td>₹125.00</td>
+            <td>₹115.00</td>
+            <td>5%<br/>₹5.75</td>
+            <td>₹120.75</td>
+          </tr>
+        
+          
+          <tr>
+            <td>7</td>
+            <td>Milk Product 7</td>
+            <td class="c-qty">2</td>
+            <td>₹130.00</td>
+            <td>₹120.00</td>
+            <td>5%<br/>₹6.00</td>
+            <td>₹126.00</td>
+          </tr>
+        
+          
+          <tr>
+            <td>8</td>
+            <td>Milk Product 8</td>
+            <td class="c-qty">2</td>
+            <td>₹135.00</td>
+            <td>₹125.00</td>
+            <td>5%<br/>₹6.25</td>
+            <td>₹131.25</td>
+          </tr>
+        
+          
+          <tr>
+            <td>9</td>
+            <td>Milk Product 9</td>
+            <td class="c-qty">2</td>
+            <td>₹140.00</td>
+            <td>₹130.00</td>
+            <td>5%<br/>₹6.50</td>
+            <td>₹136.50</td>
+          </tr>
+        
+          
+          <tr>
+            <td>10</td>
+            <td>Milk Product 10</td>
+            <td class="c-qty">2</td>
+            <td>₹145.00</td>
+            <td>₹135.00</td>
+            <td>5%<br/>₹6.75</td>
+            <td>₹141.75</td>
+          </tr>
+        
+          
+          <tr>
+            <td>11</td>
+            <td>Milk Product 11</td>
+            <td class="c-qty">2</td>
+            <td>₹150.00</td>
+            <td>₹140.00</td>
+            <td>5%<br/>₹7.00</td>
+            <td>₹147.00</td>
+          </tr>
+        
+          
+          <tr>
+            <td>12</td>
+            <td>Milk Product 12</td>
+            <td class="c-qty">2</td>
+            <td>₹155.00</td>
+            <td>₹145.00</td>
+            <td>5%<br/>₹7.25</td>
+            <td>₹152.25</td>
+          </tr>
+        
+          
+          <tr>
+            <td>13</td>
+            <td>Milk Product 13</td>
+            <td class="c-qty">2</td>
+            <td>₹160.00</td>
+            <td>₹150.00</td>
+            <td>5%<br/>₹7.50</td>
+            <td>₹157.50</td>
+          </tr>
+        
+          
+          <tr>
+            <td>14</td>
+            <td>Milk Product 14</td>
+            <td class="c-qty">2</td>
+            <td>₹165.00</td>
+            <td>₹155.00</td>
+            <td>5%<br/>₹7.75</td>
+            <td>₹162.75</td>
+          </tr>
+        
+          
+          <tr>
+            <td>15</td>
+            <td>Milk Product 15</td>
+            <td class="c-qty">2</td>
+            <td>₹170.00</td>
+            <td>₹160.00</td>
+            <td>5%<br/>₹8.00</td>
+            <td>₹168.00</td>
+          </tr>
+        
+          
+          <tr>
+            <td>16</td>
+            <td>Milk Product 16</td>
+            <td class="c-qty">2</td>
+            <td>₹175.00</td>
+            <td>₹165.00</td>
+            <td>5%<br/>₹8.25</td>
+            <td>₹173.25</td>
+          </tr>
+        
+          
+          <tr>
+            <td>17</td>
+            <td>Milk Product 17</td>
+            <td class="c-qty">2</td>
+            <td>₹180.00</td>
+            <td>₹170.00</td>
+            <td>5%<br/>₹8.50</td>
+            <td>₹178.50</td>
+          </tr>
+        
+          
+          <tr>
+            <td>18</td>
+            <td>Milk Product 18</td>
+            <td class="c-qty">2</td>
+            <td>₹185.00</td>
+            <td>₹175.00</td>
+            <td>5%<br/>₹8.75</td>
+            <td>₹183.75</td>
+          </tr>
+        
+          
+          <tr>
+            <td>19</td>
+            <td>Milk Product 19</td>
+            <td class="c-qty">2</td>
+            <td>₹190.00</td>
+            <td>₹180.00</td>
+            <td>5%<br/>₹9.00</td>
+            <td>₹189.00</td>
+          </tr>
+        
+          
+          <tr>
+            <td>20</td>
+            <td>Milk Product 20</td>
+            <td class="c-qty">2</td>
+            <td>₹195.00</td>
+            <td>₹185.00</td>
+            <td>5%<br/>₹9.25</td>
+            <td>₹194.25</td>
+          </tr>
+        
+          
+          <tr>
+            <td>21</td>
+            <td>Milk Product 21</td>
+            <td class="c-qty">2</td>
+            <td>₹200.00</td>
+            <td>₹190.00</td>
+            <td>5%<br/>₹9.50</td>
+            <td>₹199.50</td>
+          </tr>
+        
+</tbody>
+</table>
+
+<div class="subtotal">
+  <span class="label">Subtotal:</span>
+  Items 21 |
+  Tax ₹0.00 |
+  Total ₹0.00
+</div>
+
+<div class="bank section-safe">
+  <div class="bank-flex">
+    <div class="bank-left">
+      <div>
+        <div class="bank-title">BANK & PAYMENT DETAILS</div>
+        <div class="bank-row">State Bank of India</div>
+        <div class="bank-row"><span class="label">A/C:</span> 1234567890</div>
+        <div class="bank-row"><span class="label">IFSC:</span> SBIN0000123</div>
+        <div class="bank-row"><span class="label">UPI:</span> sitadairy@upi</div>
+      </div>
+      <div class="qr"><img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=sitadairy@upi" /></div>
+    </div>
+
+    <div class="amount-box">
+      <div class="amount-row"><span class="label">Taxable:</span> ₹0.00</div>
+      <div class="amount-row"><span class="label">CGST:</span> ₹0.00</div>
+      <div class="amount-row"><span class="label">SGST:</span> ₹0.00</div>
+      <div class="amount-row total"><span class="label">Total:</span> ₹0.00</div>
+      <div class="amount-row"><span class="label">Received:</span> ₹0.00</div>
+    </div>
+  </div>
+</div>
+
+<div class="total-words">Rupees Two Thousand Only</div>
+
+</div>
+</body>
+</html>
