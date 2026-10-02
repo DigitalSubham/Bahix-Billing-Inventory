@@ -78,3 +78,9 @@ dist/
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+# Serverless Framework build artifacts.
+# These embed resolved environment variables (DB credentials, JWT secret)
+# in plaintext - they must never be committed.
+.serverless/
+**/.serverless/

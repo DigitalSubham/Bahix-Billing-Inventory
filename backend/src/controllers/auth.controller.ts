@@ -121,7 +121,9 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
 
     // Fetch user basic info
     const userRes = await pool.query(
-      `SELECT id, name, email, mobile, address, gst_number, pan_number, role, is_active, created_at
+      `SELECT id, name, email, mobile, address, gst_number, pan_number, role, is_active, created_at,
+              COALESCE(business_category, 'GENERAL') AS business_category,
+              fssai_no, dl_no, jurisdiction
        FROM users WHERE id=$1`,
       [user_id],
     );

@@ -12,9 +12,14 @@ export const updateUserDB = async (client: any, userId: number, data: any) => {
       mobile = COALESCE($3, mobile),
       email = COALESCE($4, email),
       gst_number = COALESCE($5, gst_number),
-      pan_number = COALESCE($6, pan_number)
-    WHERE id = $7
-    RETURNING id, name, email, mobile, address, gst_number, pan_number;
+      pan_number = COALESCE($6, pan_number),
+      business_category = COALESCE($7, business_category, 'GENERAL'),
+      fssai_no = COALESCE($8, fssai_no),
+      dl_no = COALESCE($9, dl_no),
+      jurisdiction = COALESCE($10, jurisdiction)
+    WHERE id = $11
+    RETURNING id, name, email, mobile, address, gst_number, pan_number,
+              business_category, fssai_no, dl_no, jurisdiction;
     `,
     [
       data.name,
@@ -23,6 +28,10 @@ export const updateUserDB = async (client: any, userId: number, data: any) => {
       data.email,
       data.gst_number,
       data.pan_number,
+      data.business_category,
+      data.fssai_no,
+      data.dl_no,
+      data.jurisdiction,
       userId,
     ]
   );

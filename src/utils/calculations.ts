@@ -1,14 +1,67 @@
 import { InvoiceItem } from '../types';
 
-export const calculateItemAmount = (quantity: any, rate: any, taxRate: any) => {
-  const baseAmount = quantity * rate;
-  const taxAmount = (baseAmount * taxRate) / 100;
-  const totalAmount = baseAmount + taxAmount;
+const round2 = (value: number) => Number((Number(value) || 0).toFixed(2));
+
+/**
+ * Line maths.
+ *
+ * The discount is a scheme percentage, which is how the trade negotiates it
+ * and how the reference invoice computes: the taxable value comes from the
+ * unrounded percentage, and the "Dis Amt" column shows the per-unit rupee
+ * equivalent rounded for display. Deriving the rupee figure from a stored
+ * percentage (rather than the reverse) keeps a line correct when its rate
+ * changes.
+ *
+ * A reduced taxable value reduces the tax charged on the line.
+ */
+export const calculateItemAmount = (
+  quantity: any,
+  rate: any,
+  taxRate: any,
+  discountPercent: any = 0,
+) => {
+  const qty = Number(quantity) || 0;
+  const unitRate = Number(rate) || 0;
+  const baseAmount = qty * unitRate;
+
+  const percent = Math.min(Math.max(Number(discountPercent) || 0, 0), 100);
+  const taxableAmount = round2(baseAmount * (1 - percent / 100));
+
+  // Per-unit rupee discount, for the printed column.
+  const discountAmount = round2(unitRate * (percent / 100));
+  // What this line actually takes off the invoice.
+  const discountTotal = round2(baseAmount - taxableAmount);
+
+  const taxAmount = round2((taxableAmount * (Number(taxRate) || 0)) / 100);
+  const totalAmount = round2(taxableAmount + taxAmount);
 
   return {
-    baseAmount: Number.parseFloat(baseAmount?.toFixed(2)),
-    taxAmount: Number.parseFloat(taxAmount?.toFixed(2)),
-    totalAmount: Number.parseFloat(totalAmount?.toFixed(2)),
+    baseAmount: round2(baseAmount),
+    discountPercent: percent,
+    discountAmount,
+    discountTotal,
+    taxableAmount,
+    taxAmount,
+    totalAmount,
+  };
+};
+
+/**
+ * Billed quantity and free quantity, summed across lines.
+ * Printed as the "Totals c/o  154+42 PCS" row.
+ */
+export const calculateQuantityTotals = (items: InvoiceItem[]) => {
+  let totalQuantity = 0;
+  let totalFreeQuantity = 0;
+
+  items.forEach(item => {
+    totalQuantity += Number(item.quantity) || 0;
+    totalFreeQuantity += Number(item.freeQty) || 0;
+  });
+
+  return {
+    totalQuantity: round2(totalQuantity),
+    totalFreeQuantity: round2(totalFreeQuantity),
   };
 };
 
@@ -19,40 +72,53 @@ export const calculateInvoiceTotals = (
 ) => {
   let subtotal = 0;
   let totalTax = 0;
+  let lineDiscountTotal = 0;
+  let lineTaxableTotal = 0;
 
   items.forEach((item: InvoiceItem) => {
-    subtotal += Number(item.quantity) * Number(item.sellingRate);
-    totalTax += Number(item.taxAmount);
+    const base = (Number(item.quantity) || 0) * (Number(item.sellingRate) || 0);
+    const taxable = Number.isFinite(Number(item.taxableAmount))
+      ? Number(item.taxableAmount)
+      : base;
+
+    subtotal += base;
+    totalTax += Number(item.taxAmount) || 0;
+    // What the line took off, derived from the values rather than the
+    // per-unit figure shown in the Dis Amt column.
+    lineDiscountTotal += base - taxable;
+    lineTaxableTotal += taxable;
   });
 
   const parsedDiscount = Number(discount) || 0;
 
-  let discountAmount = 0;
+  let invoiceDiscount = 0;
 
   if (discountType === 'PERCENTAGE') {
-    discountAmount = (subtotal * parsedDiscount) / 100;
+    invoiceDiscount = (lineTaxableTotal * parsedDiscount) / 100;
   } else {
-    discountAmount = parsedDiscount;
+    invoiceDiscount = parsedDiscount;
   }
 
-  // Prevent negative subtotal
-  discountAmount = Math.min(discountAmount, subtotal);
+  // Prevent a negative taxable value
+  invoiceDiscount = Math.min(Math.max(invoiceDiscount, 0), lineTaxableTotal);
 
-  const discountedSubtotal = subtotal - discountAmount;
+  const taxableAmount = lineTaxableTotal - invoiceDiscount;
 
-  // Recalculate tax proportionally if needed
   const cgst = totalTax / 2;
   const sgst = totalTax / 2;
 
-  const totalAmount = discountedSubtotal + totalTax;
+  const totalAmount = taxableAmount + totalTax;
 
   return {
-    subtotal: Number(subtotal.toFixed(2)),
-    discountAmount: Number(discountAmount.toFixed(2)),
-    taxableAmount: Number(discountedSubtotal.toFixed(2)),
-    cgstTotal: Number(cgst.toFixed(2)),
-    sgstTotal: Number(sgst.toFixed(2)),
-    totalAmount: Number(totalAmount.toFixed(2)),
+    subtotal: round2(subtotal),
+    lineDiscountTotal: round2(lineDiscountTotal),
+    // Total taken off the invoice: per-line discounts plus the invoice-level one.
+    discountAmount: round2(lineDiscountTotal + invoiceDiscount),
+    invoiceDiscountAmount: round2(invoiceDiscount),
+    taxableAmount: round2(taxableAmount),
+    cgstTotal: round2(cgst),
+    sgstTotal: round2(sgst),
+    totalAmount: round2(totalAmount),
   };
 };
 

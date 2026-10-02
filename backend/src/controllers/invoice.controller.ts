@@ -189,8 +189,13 @@ export const createInvoice = async (req: AuthRequest, res: Response) => {
       `
       INSERT INTO invoices 
       (user_id, customer_id, invoice_number, invoice_type, invoice_date, due_date, 
-        payment_status, total_amount, total_tax, notes,cgst_total,sgst_total,igst_total,discount_amnt,discount_type,received_amount,subtotal)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+        payment_status, total_amount, total_tax, notes,cgst_total,sgst_total,igst_total,discount_amnt,discount_type,received_amount,subtotal,
+        business_category)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,
+        -- Stamped from the user record rather than the request body: the
+        -- category an invoice was issued under is not the client's to choose,
+        -- and it must stay fixed if the business switches category later.
+        (SELECT COALESCE(business_category, 'GENERAL') FROM users WHERE id = $1))
       RETURNING *;
       `,
       [
@@ -234,14 +239,25 @@ export const createInvoice = async (req: AuthRequest, res: Response) => {
         cgst,
         sgst,
         igst,
+        hsn,
+        unit,
+        mrp,
+        batch_no,
+        exp_date,
+        mfg_by,
+        free_qty,
+        discount_percent,
+        discount_amount,
+        taxable_amount,
       } = item;
 
       // Insert invoice item
       await client.query(
         `
         INSERT INTO invoice_items 
-        (invoice_id,product_id, product_name, quantity, selling_rate, line_total, tax_percent, tax_amount,cgst,sgst,igst)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        (invoice_id,product_id, product_name, quantity, selling_rate, line_total, tax_percent, tax_amount,cgst,sgst,igst,
+         hsn, unit, mrp, batch_no, exp_date, mfg_by, free_qty, discount_percent, discount_amount, taxable_amount)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
         `,
         [
           invoice.id,
@@ -255,10 +271,23 @@ export const createInvoice = async (req: AuthRequest, res: Response) => {
           cgst,
           sgst,
           igst,
+          hsn ?? null,
+          unit ?? null,
+          mrp ?? null,
+          batch_no ?? null,
+          exp_date ?? null,
+          mfg_by ?? null,
+          free_qty ?? 0,
+          discount_percent ?? 0,
+          discount_amount ?? 0,
+          taxable_amount ?? null,
         ],
       );
 
-      // 3️⃣ Update product stock
+      // 3️⃣ Update product stock.
+      // Free goods leave inventory too, so both quantities are deducted.
+      const stockToDeduct = (Number(quantity) || 0) + (Number(free_qty) || 0);
+
       const updateRes = await client.query(
         `
         UPDATE products
@@ -268,7 +297,7 @@ export const createInvoice = async (req: AuthRequest, res: Response) => {
           AND COALESCE(stock, 0) >= $1
         RETURNING stock;
         `,
-        [quantity, product_id, user_id],
+        [stockToDeduct, product_id, user_id],
       );
 
       if (updateRes.rowCount === 0) {
@@ -283,7 +312,7 @@ export const createInvoice = async (req: AuthRequest, res: Response) => {
 
         throw new ErrorHandler(
           400,
-          `Insufficient stock for ${product_name}. Available stock: ${productRes.rows[0].stock}`,
+          `Insufficient stock for ${product_name}. Required: ${stockToDeduct}, available: ${productRes.rows[0].stock}`,
         );
       }
     }
@@ -347,6 +376,7 @@ export const getInvoices = async (req: AuthRequest, res: Response) => {
         inv.subtotal,
         inv.discount_amnt AS discount_Amount,
         inv.discount_type AS discount_Type,
+        inv.business_category,
 
         -- Customer full details
         json_build_object(
@@ -365,13 +395,23 @@ export const getInvoices = async (req: AuthRequest, res: Response) => {
           json_agg(
             json_build_object(
               'id', ii.id,
-              'mrp', p.mrp, 
+              'product_id', ii.product_id,
+              'mrp', COALESCE(ii.mrp, p.mrp),
               'productName', ii.product_name,
               'quantity', ii.quantity,
               'selling_rate', ii.selling_rate,
               'amount', ii.line_total,
               'taxRate', ii.tax_percent,
-              'tax_amount', ii.tax_amount
+              'tax_amount', ii.tax_amount,
+              'hsn_code', COALESCE(ii.hsn, p.hsn_code),
+              'unit', COALESCE(ii.unit, p.unit),
+              'batch_no', ii.batch_no,
+              'exp_date', ii.exp_date,
+              'mfg_by', ii.mfg_by,
+              'free_qty', COALESCE(ii.free_qty, 0),
+              'discount_percent', COALESCE(ii.discount_percent, 0),
+              'discount_amount', COALESCE(ii.discount_amount, 0),
+              'taxable_amount', ii.taxable_amount
             )
           ) FILTER (WHERE ii.id IS NOT NULL),
           '[]'
@@ -428,7 +468,9 @@ export const getInvoiceById = async (req: AuthRequest, res: Response) => {
       [id],
     );
 
-    res.json({ ...invoiceRes.rows[0], items: itemsRes.rows });
+    res.json(
+      camelize({ ...invoiceRes.rows[0], items: itemsRes.rows }),
+    );
   } catch (err: any) {
     console.error(err);
     throw new ErrorHandler(

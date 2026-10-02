@@ -1,3 +1,5 @@
+import { BusinessCategory } from '../constants/categoryFields';
+
 export type DatePickerType = 'invoice' | 'due';
 export enum formTypeEnum {
   ADD = 'add',
@@ -63,6 +65,12 @@ export interface CustomerBaseType {
   customerType: string;
   creditLimit: string;
   notes: string;
+  // Category-specific (PHARMA); optional for every other category.
+  dlNo?: string;
+  fssaiNo?: string;
+  uid?: string;
+  stateCode?: string;
+  beat?: string;
 }
 
 export interface CustomerType extends CustomerBaseType {
@@ -82,6 +90,11 @@ export interface Business {
   ifscCode?: string;
   upiId?: string;
   logo?: string;
+  businessCategory?: BusinessCategory;
+  // Category-specific (PHARMA); optional for every other category.
+  fssaiNo?: string;
+  dlNo?: string;
+  jurisdiction?: string;
 }
 
 export interface ProductFormErrors {
@@ -109,6 +122,11 @@ export interface ProductBaseType {
   baseUnit: string;
   conversionFactor: string;
   unitType: 'SIMPLE' | 'COMPOUND';
+  // Category-specific (PHARMA) defaults copied onto an invoice line when the
+  // product is added; editable per line afterwards.
+  batchNo?: string;
+  expDate?: string;
+  mfgBy?: string;
 }
 
 export interface ProductType extends ProductBaseType {
@@ -116,6 +134,12 @@ export interface ProductType extends ProductBaseType {
 }
 
 export interface InvoiceItem {
+  /**
+   * Identifies the line, not the product. The same product can appear on
+   * several lines (different batch, expiry or rate), so every lookup and
+   * update is keyed by this, never by productId.
+   */
+  id: string;
   productId: string;
   productName: string;
   quantity: number;
@@ -124,12 +148,28 @@ export interface InvoiceItem {
   taxRate: string;
   taxAmount: number;
   amount: number;
+  /** qty * rate, less the scheme discount; the value tax is charged on. */
+  taxableAmount: number;
+  /**
+   * The negotiated scheme rate. This is what the user enters and what is
+   * stored; everything else about the discount is derived from it.
+   */
+  discountPercent: number;
+  /** Derived per-unit rupee discount, printed in the "Dis Amt" column. */
+  discountAmount: number;
+  /** Goods given free with the line: billed at zero, still leaves stock. */
+  freeQty: number;
+  hsnCode?: string;
   unitType?: 'SIMPLE' | 'COMPOUND';
   unit?: string;
   baseUnit?: string;
   conversionFactor?: string;
   stockInBase?: string;
   qtyInputUnit?: 'COMPOUND' | 'BASE';
+  // Category-specific (PHARMA).
+  batchNo?: string;
+  expDate?: string;
+  mfgBy?: string;
 }
 
 export interface InvoiceBase {
@@ -150,6 +190,12 @@ export interface InvoiceBase {
   createdAt?: Date;
   discountAmount?: number;
   discountType?: 'PERCENTAGE' | 'FIXED-AMOUNT';
+  /**
+   * The category this invoice was ISSUED under, stamped at creation.
+   * The PDF uses it rather than the business's current category, so an
+   * invoice always reprints in the layout the customer received.
+   */
+  businessCategory?: BusinessCategory;
 }
 
 export interface InvoiceForm {
@@ -171,6 +217,8 @@ export interface InvoiceTotals {
   sgst: number;
   totalAmount: number;
 }
+
+export type { BusinessCategory };
 
 export interface DashboardStats {
   totalSales: number;

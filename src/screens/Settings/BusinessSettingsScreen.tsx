@@ -15,6 +15,11 @@ import {
 import QRCode from 'react-native-qrcode-svg';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getProfileApi, updateProfileApi } from '../../apis/authApi';
+import AppDropdownPicker from '../../components/common/Dropdown';
+import {
+    BUSINESS_CATEGORY_OPTIONS,
+    normalizeCategory,
+} from '../../constants/categoryFields';
 
 interface Props {
     navigation: any;
@@ -54,6 +59,10 @@ const BusinessSettingsScreen: React.FC<Props> = ({ navigation }) => {
         accountNo: business?.account_no || '',
         ifscCode: business?.ifsc || '',
         upiId: business?.upi_id || '',
+        businessCategory: normalizeCategory(business?.business_category),
+        fssaiNo: business?.fssai_no || '',
+        dlNo: business?.dl_no || '',
+        jurisdiction: business?.jurisdiction || '',
     });
 
     useEffect(() => {
@@ -69,6 +78,10 @@ const BusinessSettingsScreen: React.FC<Props> = ({ navigation }) => {
                 accountNo: business?.account_no || '',
                 ifscCode: business?.ifsc || '',
                 upiId: business?.upi_id || '',
+                businessCategory: normalizeCategory(business?.business_category),
+                fssaiNo: business?.fssai_no || '',
+                dlNo: business?.dl_no || '',
+                jurisdiction: business?.jurisdiction || '',
             });
         }
     }, [business]);
@@ -151,6 +164,10 @@ const BusinessSettingsScreen: React.FC<Props> = ({ navigation }) => {
             account_no: formData.accountNo,
             ifsc: formData.ifscCode,
             upi_id: formData.upiId,
+            business_category: formData.businessCategory,
+            fssai_no: formData.fssaiNo,
+            dl_no: formData.dlNo,
+            jurisdiction: formData.jurisdiction,
         }
         saveMutation.mutate(payload);
     };
@@ -245,6 +262,40 @@ const BusinessSettingsScreen: React.FC<Props> = ({ navigation }) => {
                     </Card.Content>
                 </Card>
 
+                {/* Business Type */}
+                <Card style={styles.card}>
+                    <Card.Content>
+                        <Text variant="titleMedium" style={styles.sectionTitle}>
+                            Business Type
+                        </Text>
+
+                        <AppDropdownPicker
+                            label="Category"
+                            value={formData.businessCategory}
+                            items={BUSINESS_CATEGORY_OPTIONS}
+                            onChange={(value) =>
+                                setFormData({ ...formData, businessCategory: normalizeCategory(value) })
+                            }
+                            zIndex={4000}
+                        />
+                        <Text variant="bodySmall" style={styles.helperText}>
+                            Pharma adds batch number, expiry, manufacturer and free quantity to invoices.
+                        </Text>
+
+                        <TextInput
+                            label="Jurisdiction (for invoice terms)"
+                            value={formData.jurisdiction}
+                            onChangeText={(text) => setFormData({ ...formData, jurisdiction: text })}
+                            mode="outlined"
+                            style={styles.input}
+                            placeholder="e.g., PATNA"
+                        />
+                        <Text variant="bodySmall" style={styles.helperText}>
+                            Printed as "Subject to '...' Jurisdiction only"
+                        </Text>
+                    </Card.Content>
+                </Card>
+
                 {/* Tax Information */}
                 <Card style={styles.card}>
                     <Card.Content>
@@ -295,6 +346,29 @@ const BusinessSettingsScreen: React.FC<Props> = ({ navigation }) => {
                         <Text variant="bodySmall" style={styles.helperText}>
                             Format: ABCDE1234F
                         </Text>
+
+                        {formData.businessCategory === 'PHARMA' && (
+                            <>
+                                <TextInput
+                                    label="Drug Licence No. (D.L.No.)"
+                                    value={formData.dlNo}
+                                    onChangeText={(text) => setFormData({ ...formData, dlNo: text })}
+                                    mode="outlined"
+                                    style={styles.input}
+                                    placeholder="e.g., 20B-234/21B-234A"
+                                />
+
+                                <TextInput
+                                    label="FSSAI Licence No."
+                                    value={formData.fssaiNo}
+                                    onChangeText={(text) => setFormData({ ...formData, fssaiNo: text })}
+                                    mode="outlined"
+                                    keyboardType="numeric"
+                                    style={styles.input}
+                                    placeholder="e.g., 10416000000820"
+                                />
+                            </>
+                        )}
                     </Card.Content>
                 </Card>
 

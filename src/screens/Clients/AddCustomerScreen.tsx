@@ -17,6 +17,8 @@ import {
     Chip,
 } from 'react-native-paper';
 import AppDropdownPicker from '../../components/common/Dropdown';
+import { useBusinessCategory } from '../../hooks/useBusinessCategory';
+import { hasPartyField } from '../../constants/categoryFields';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList, FormErrors, CustomerBaseType, CustomerType, formTypeEnum } from '../../types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -61,8 +63,15 @@ const AddCustomerScreen = ({ navigation, route }: Props) => {
         customerType: 'Regular',
         creditLimit: '0',
         notes: '',
+        dlNo: '',
+        fssaiNo: '',
+        uid: '',
+        stateCode: '',
+        beat: '',
     });
 
+    const businessCategory = useBusinessCategory();
+    const showLicenceFields = hasPartyField(businessCategory, 'dlNo');
     const [errors, setErrors] = useState<FormErrors>({});
     const [showAdvanced, setShowAdvanced] = useState(false);
     const queryClient = useQueryClient();
@@ -104,6 +113,11 @@ const AddCustomerScreen = ({ navigation, route }: Props) => {
                 customerType: existingCustomer.data.customerType || 'Regular',
                 creditLimit: existingCustomer.data.creditLimit?.toString() || '0',
                 notes: existingCustomer.data.notes || '',
+                dlNo: existingCustomer.data.dl_no || existingCustomer.data.dlNo || '',
+                fssaiNo: existingCustomer.data.fssai_no || existingCustomer.data.fssaiNo || '',
+                uid: existingCustomer.data.uid || '',
+                stateCode: existingCustomer.data.state_code || existingCustomer.data.stateCode || '',
+                beat: existingCustomer.data.beat || '',
             });
         }
     }, [isEditMode, existingCustomer.data]);
@@ -135,6 +149,11 @@ const AddCustomerScreen = ({ navigation, route }: Props) => {
             customerType: formData.customerType,
             creditLimit: formData.creditLimit,
             notes: formData.notes,
+            dl_no: formData.dlNo,
+            fssai_no: formData.fssaiNo,
+            uid: formData.uid,
+            state_code: formData.stateCode,
+            beat: formData.beat,
         };
 
         if (isEditMode) {
@@ -166,6 +185,11 @@ const AddCustomerScreen = ({ navigation, route }: Props) => {
                                     customerType: 'Regular',
                                     creditLimit: '0',
                                     notes: '',
+                                    dlNo: '',
+                                    fssaiNo: '',
+                                    uid: '',
+                                    stateCode: '',
+                                    beat: '',
                                 });
                                 setErrors({});
                             },
@@ -381,6 +405,56 @@ const AddCustomerScreen = ({ navigation, route }: Props) => {
                         <HelperText type="info">
                             Used for GST calculation on invoices
                         </HelperText>
+
+                        {showLicenceFields && (
+                            <>
+                                <TextInput
+                                    label="State Code"
+                                    value={formData.stateCode}
+                                    onChangeText={(text) => updateFormData('stateCode', text)}
+                                    mode="outlined"
+                                    keyboardType="numeric"
+                                    maxLength={2}
+                                    style={styles.input}
+                                    placeholder="e.g., 10"
+                                />
+
+                                <TextInput
+                                    label="Drug Licence No. (D.L.No.)"
+                                    value={formData.dlNo}
+                                    onChangeText={(text) => updateFormData('dlNo', text.toUpperCase())}
+                                    mode="outlined"
+                                    autoCapitalize="characters"
+                                    style={styles.input}
+                                />
+
+                                <TextInput
+                                    label="FSSAI Licence No."
+                                    value={formData.fssaiNo}
+                                    onChangeText={(text) => updateFormData('fssaiNo', text)}
+                                    mode="outlined"
+                                    keyboardType="numeric"
+                                    style={styles.input}
+                                />
+
+                                <TextInput
+                                    label="UID"
+                                    value={formData.uid}
+                                    onChangeText={(text) => updateFormData('uid', text)}
+                                    mode="outlined"
+                                    style={styles.input}
+                                />
+
+                                <TextInput
+                                    label="BEAT / Route"
+                                    value={formData.beat}
+                                    onChangeText={(text) => updateFormData('beat', text)}
+                                    mode="outlined"
+                                    style={styles.input}
+                                    placeholder="e.g., Sundry Debtors"
+                                />
+                            </>
+                        )}
                     </Card.Content>
                 </Card>
 

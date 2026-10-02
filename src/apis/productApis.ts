@@ -17,6 +17,9 @@ const normalizeProduct = (product: any): ProductType => ({
   minStock: product.minStock ?? product.min_stock,
   barcode: product.barcode ?? product.sku ?? '',
   hsnCode: product.hsnCode ?? product.hsn_code ?? '',
+  batchNo: product.batchNo ?? product.batch_no ?? '',
+  expDate: product.expDate ?? product.exp_date ?? '',
+  mfgBy: product.mfgBy ?? product.mfg_by ?? '',
 });
 
 const pickProducts = (payload: any): ProductType[] => {

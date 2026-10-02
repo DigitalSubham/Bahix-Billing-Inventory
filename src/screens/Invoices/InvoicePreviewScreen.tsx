@@ -70,7 +70,17 @@ export const InvoicePreviewScreen: React.FC<InvoicePreviewProps> = ({
                 line_total: item.amount,
                 cgst: Number(item.taxAmount) / 2,
                 sgst: Number(item.taxAmount) / 2,
-                igst: Number(item.taxAmount)
+                igst: Number(item.taxAmount),
+                hsn: item.hsnCode || null,
+                unit: item.unit || item.baseUnit || null,
+                mrp: Number(item.mrp) || null,
+                batch_no: item.batchNo || null,
+                exp_date: item.expDate || null,
+                mfg_by: item.mfgBy || null,
+                free_qty: Number(item.freeQty) || 0,
+                discount_percent: Number(item.discountPercent) || 0,
+                discount_amount: Number(item.discountAmount) || 0,
+                taxable_amount: Number(item.taxableAmount) || 0,
             })),
             subtotal: invoice.subtotal,
             total_tax: invoice.cgstTotal + invoice.sgstTotal,
@@ -216,9 +226,31 @@ export const InvoicePreviewScreen: React.FC<InvoicePreviewProps> = ({
                                             </Text>
                                             <Text variant="bodySmall" style={styles.itemSubtext}>
                                                 Tax: {item.taxRate || "0.00"}%
+                                                {!!item.hsnCode && ` | HSN: ${item.hsnCode}`}
                                             </Text>
+                                            {(!!item.batchNo || !!item.expDate || !!item.mfgBy) && (
+                                                <Text variant="bodySmall" style={styles.itemSubtext}>
+                                                    {[
+                                                        item.batchNo && `Batch: ${item.batchNo}`,
+                                                        item.expDate && `Exp: ${item.expDate}`,
+                                                        item.mfgBy,
+                                                    ]
+                                                        .filter(Boolean)
+                                                        .join(' | ')}
+                                                </Text>
+                                            )}
+                                            {Number(item.discountPercent) > 0 && (
+                                                <Text variant="bodySmall" style={styles.itemSubtext}>
+                                                    Discount: {Number(item.discountPercent)}% (₹
+                                                    {Number(item.discountAmount).toFixed(2)}/unit)
+                                                </Text>
+                                            )}
                                         </View>
-                                        <Text numberOfLines={1} style={[styles.colQty, styles.cellValue, styles.alignRight]}>{item.quantity}</Text>
+                                        <Text numberOfLines={1} style={[styles.colQty, styles.cellValue, styles.alignRight]}>
+                                            {Number(item.freeQty) > 0
+                                                ? `${item.quantity}+${item.freeQty}`
+                                                : item.quantity}
+                                        </Text>
                                         <Text numberOfLines={1} ellipsizeMode="clip" style={[styles.colRate, styles.cellValue, styles.alignRight]}>₹{item.sellingRate}</Text>
                                         <Text numberOfLines={1} ellipsizeMode="clip" style={[styles.colTax, styles.cellValue, styles.alignRight]}>₹{item.taxAmount}</Text>
                                         <Text numberOfLines={1} ellipsizeMode="clip" style={[styles.colAmount, styles.cellValue, styles.alignRight]}>

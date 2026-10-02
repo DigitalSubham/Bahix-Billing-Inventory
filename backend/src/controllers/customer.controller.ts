@@ -15,7 +15,19 @@ export const createCustomer = async (
   next: NextFunction,
 ) => {
   try {
-    const { name, email, mobile, address, state, gst_number } = req.body;
+    const {
+      name,
+      email,
+      mobile,
+      address,
+      state,
+      gst_number,
+      dl_no,
+      fssai_no,
+      uid,
+      state_code,
+      beat,
+    } = req.body;
     if (!name && !mobile) {
       return next(new ErrorHandler(500, "Name and mobile are required"));
     }
@@ -58,9 +70,22 @@ export const createCustomer = async (
     }
 
     const result = await pool.query(
-      `INSERT INTO customers (user_id,name,email,mobile,address,state,gst_number)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [user_id, name, email, mobile, address, state, gst_number],
+      `INSERT INTO customers (user_id,name,email,mobile,address,state,gst_number,dl_no,fssai_no,uid,state_code,beat)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+      [
+        user_id,
+        name,
+        email,
+        mobile,
+        address,
+        state,
+        gst_number,
+        dl_no,
+        fssai_no,
+        uid,
+        state_code,
+        beat,
+      ],
     );
 
     res
@@ -200,13 +225,23 @@ export const updateCustomer = async (req: AuthRequest, res: Response) => {
       city,
       pincode,
       customerType,
+      dl_no,
+      fssai_no,
+      uid,
+      state_code,
+      beat,
     } = Object.fromEntries(
       Object.entries(req.body).map(([k, v]) => [k, clean(v)]),
     );
 
     const result = await pool.query(
-      `UPDATE customers SET name=$1,email=$2,mobile=$3,address=$4,state=$5,gst_number=$6,city=$7,pincode=$8,customer_type=$9
-       WHERE id=$10 AND user_id=$11 RETURNING *`,
+      `UPDATE customers SET name=$1,email=$2,mobile=$3,address=$4,state=$5,gst_number=$6,city=$7,pincode=$8,customer_type=$9,
+              dl_no=COALESCE($10, dl_no),
+              fssai_no=COALESCE($11, fssai_no),
+              uid=COALESCE($12, uid),
+              state_code=COALESCE($13, state_code),
+              beat=COALESCE($14, beat)
+       WHERE id=$15 AND user_id=$16 RETURNING *`,
       [
         name,
         email,
@@ -217,6 +252,11 @@ export const updateCustomer = async (req: AuthRequest, res: Response) => {
         city,
         pincode,
         customerType,
+        dl_no,
+        fssai_no,
+        uid,
+        state_code,
+        beat,
         id,
         user_id,
       ],
