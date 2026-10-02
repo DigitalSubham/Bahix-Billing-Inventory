@@ -33,6 +33,8 @@ import { formatProductStock } from '../../utils/helper';
 import { usePaginatedListQuery } from '../../hooks/usePaginatedListQuery';
 import PaginationFooter from '../../components/common/PaginationFooter';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
+import { useBusinessCategory } from '../../hooks/useBusinessCategory';
+import { hasItemField } from '../../constants/categoryFields';
 
 type AddCustomerScreenNavigationProp = NativeStackNavigationProp<
   RootStackParamList
@@ -45,10 +47,20 @@ interface Props {
 const CreateInvoiceScreen: React.FC<Props> = ({ navigation }) => {
   const [customer, setCustomer] = useState<CustomerType | null>(null);
 
+  const businessCategory = useBusinessCategory();
+  const showBatchFields = hasItemField(businessCategory, 'batchNo');
+  const showFreeQty = hasItemField(businessCategory, 'freeQty');
+  // The general invoice template has no discount column, so a per-line
+  // discount is only offered where it can actually be printed.
+  const showLineDiscount = hasItemField(businessCategory, 'discountPercent');
+
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [quantityDrafts, setQuantityDrafts] = useState<Record<string, string>>(
     {},
   );
+  // Raw text for the editable numeric line fields, so partial input ("1." ,"")
+  // survives while typing. Keyed by `${lineId}:${field}`.
+  const [fieldDrafts, setFieldDrafts] = useState<Record<string, string>>({});
   const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
   const [datePickerType, setDatePickerType] =
     useState<DatePickerType>('invoice');
@@ -211,22 +223,57 @@ const CreateInvoiceScreen: React.FC<Props> = ({ navigation }) => {
     setCustomerSearchQuery('');
   };
 
-  const addProduct = (product: ProductType) => {
-    const existingItem = items.find(item => item.productId === product.id);
-    const initialBaseQty = 1;
-    const maxAllowedForNewItem = Math.floor(Number.parseFloat(product.stock || '0') || 0);
+  const makeLineId = () =>
+    `line-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-    if (maxAllowedForNewItem < initialBaseQty) {
+  /**
+   * Stock already committed to OTHER lines of the same product. Without this,
+   * two lines of one product would each believe they can take the full stock.
+   */
+  const getAllocatedElsewhere = (line: InvoiceItem) =>
+    items
+      .filter(other => other.id !== line.id && other.productId === line.productId)
+      .reduce(
+        (sum, other) =>
+          sum + (Number(other.quantity) || 0) + (Number(other.freeQty) || 0),
+        0,
+      );
+
+  const addProduct = (product: ProductType) => {
+    const initialBaseQty = 1;
+    const stockOnHand = Math.floor(
+      Number.parseFloat(product.stock || '0') || 0,
+    );
+    const alreadyUsed = items
+      .filter(item => item.productId === product.id)
+      .reduce(
+        (sum, item) =>
+          sum + (Number(item.quantity) || 0) + (Number(item.freeQty) || 0),
+        0,
+      );
+
+    if (stockOnHand - alreadyUsed < initialBaseQty) {
       Alert.alert('Out of stock', `${product.name} is out of stock`);
       return;
     }
 
-    if (existingItem) {
-      const currentInputQty = getInputQuantity(existingItem);
-      updateQuantity(existingItem.productId, currentInputQty + 1);
+    // Batch-tracking businesses sell the same product from several batches, so
+    // each tap starts a new line. Elsewhere, repeat taps bump the quantity.
+    const existingLine = showBatchFields
+      ? undefined
+      : items.find(item => item.productId === product.id);
+
+    if (existingLine) {
+      updateQuantity(existingLine.id, getInputQuantity(existingLine) + 1);
     } else {
-      const calc = calculateItemAmount(initialBaseQty, product.rate, product.taxRate);
+      const calc = calculateItemAmount(
+        initialBaseQty,
+        product.rate,
+        product.taxRate,
+        0,
+      );
       const newItem: InvoiceItem = {
+        id: makeLineId(),
         productId: product?.id,
         productName: product.name,
         quantity: initialBaseQty,
@@ -235,12 +282,20 @@ const CreateInvoiceScreen: React.FC<Props> = ({ navigation }) => {
         taxRate: product.taxRate,
         taxAmount: calc.taxAmount,
         amount: calc.totalAmount,
+        taxableAmount: calc.taxableAmount,
+        discountPercent: 0,
+        discountAmount: 0,
+        freeQty: 0,
+        hsnCode: product.hsnCode,
         unitType: product.unitType,
         unit: product.unit,
         baseUnit: product.baseUnit,
         conversionFactor: product.conversionFactor,
         stockInBase: product.stock,
         qtyInputUnit: 'BASE',
+        batchNo: product.batchNo,
+        expDate: product.expDate,
+        mfgBy: product.mfgBy,
       };
       setItems([...items, newItem]);
     }
@@ -254,10 +309,10 @@ const CreateInvoiceScreen: React.FC<Props> = ({ navigation }) => {
       return Number.MAX_SAFE_INTEGER;
     }
 
-    const stockInBase = parsedStock;
-    const conversionFactor = Number.parseFloat(item.conversionFactor || '1') || 1;
+    const available =
+      parsedStock - getAllocatedElsewhere(item) - (Number(item.freeQty) || 0);
 
-    return Math.floor(stockInBase);
+    return Math.max(Math.floor(available), 0);
   };
 
   const getQuantityUnitLabel = (item: InvoiceItem) => {
@@ -304,65 +359,114 @@ const CreateInvoiceScreen: React.FC<Props> = ({ navigation }) => {
     return `1 ${unitLabel} = ${conversionFactor} ${baseUnitLabel}`;
   };
 
-  const updateQuantity = (
-    productId: string,
-    inputQuantity: number,
-    showStockAlert: boolean = true,
-  ) => {
-    if (inputQuantity <= 0) {
-      removeItem(productId);
-      return;
-    }
+  /**
+   * Single entry point for editing a line: applies the change, then re-derives
+   * taxable value, tax and amount so they can never drift from the inputs.
+   */
+  const updateLine = (lineId: string, patch: Partial<InvoiceItem>) => {
+    setItems(prev =>
+      prev.map(item => {
+        if (item.id !== lineId) return item;
 
-    setItems(
-      items.map(item => {
-        if (item.productId === productId) {
-          const maxAllowed = getMaxAllowedInputQuantity(item);
-          const sanitizedInputQuantity = Math.min(inputQuantity, maxAllowed || 0);
-          const sanitizedBaseQuantity = toBaseQuantity(item, sanitizedInputQuantity);
+        const next = { ...item, ...patch };
+        const calc = calculateItemAmount(
+          next.quantity,
+          next.sellingRate,
+          next.taxRate,
+          next.discountPercent,
+        );
 
-          if (sanitizedInputQuantity <= 0 || sanitizedBaseQuantity <= 0) {
-            if (showStockAlert) {
-              Alert.alert('Out of stock', `${item.productName} is out of stock`);
-            }
-            return item;
-          }
-
-          if (showStockAlert && sanitizedInputQuantity < inputQuantity) {
-            Alert.alert(
-              'Stock limit',
-              `Only ${maxAllowed} ${getQuantityUnitLabel(item)} available`,
-            );
-          }
-
-          const calc = calculateItemAmount(
-            sanitizedBaseQuantity,
-            item.sellingRate,
-            item.taxRate,
-          );
-          return {
-            ...item,
-            quantity: sanitizedBaseQuantity,
-            taxAmount: calc.taxAmount,
-            amount: calc.totalAmount,
-          };
-        }
-        return item;
+        return {
+          ...next,
+          discountPercent: calc.discountPercent,
+          discountAmount: calc.discountAmount,
+          taxableAmount: calc.taxableAmount,
+          taxAmount: calc.taxAmount,
+          amount: calc.totalAmount,
+        };
       }),
     );
   };
 
-  const removeItem = (productId: string) => {
-    setItems(items.filter(item => item.productId !== productId));
+  const updateQuantity = (
+    lineId: string,
+    inputQuantity: number,
+    showStockAlert: boolean = true,
+  ) => {
+    if (inputQuantity <= 0) {
+      removeItem(lineId);
+      return;
+    }
+
+    const item = items.find(line => line.id === lineId);
+    if (!item) return;
+
+    const maxAllowed = getMaxAllowedInputQuantity(item);
+    const sanitizedInputQuantity = Math.min(inputQuantity, maxAllowed || 0);
+    const sanitizedBaseQuantity = toBaseQuantity(item, sanitizedInputQuantity);
+
+    if (sanitizedInputQuantity <= 0 || sanitizedBaseQuantity <= 0) {
+      if (showStockAlert) {
+        Alert.alert('Out of stock', `${item.productName} is out of stock`);
+      }
+      return;
+    }
+
+    if (showStockAlert && sanitizedInputQuantity < inputQuantity) {
+      Alert.alert(
+        'Stock limit',
+        `Only ${maxAllowed} ${getQuantityUnitLabel(item)} available`,
+      );
+    }
+
+    updateLine(lineId, { quantity: sanitizedBaseQuantity });
+  };
+
+  /** Free goods are not billed but still leave stock, so they are clamped too. */
+  const updateFreeQuantity = (lineId: string, value: number) => {
+    const item = items.find(line => line.id === lineId);
+    if (!item) return;
+
+    const parsedStock = Number.parseFloat(item.stockInBase || '');
+    const requested = Math.max(value, 0);
+
+    if (Number.isNaN(parsedStock)) {
+      updateLine(lineId, { freeQty: requested });
+      return;
+    }
+
+    const headroom =
+      parsedStock - getAllocatedElsewhere(item) - (Number(item.quantity) || 0);
+    const clamped = Math.min(requested, Math.max(Math.floor(headroom), 0));
+
+    if (clamped < requested) {
+      Alert.alert(
+        'Stock limit',
+        `Only ${clamped} ${getQuantityUnitLabel(item)} can be given free`,
+      );
+    }
+
+    updateLine(lineId, { freeQty: clamped });
+  };
+
+  const removeItem = (lineId: string) => {
+    setItems(items.filter(item => item.id !== lineId));
+    setFieldDrafts(prev => {
+      const next = { ...prev };
+      Object.keys(next)
+        .filter(key => key.startsWith(`${lineId}:`))
+        .forEach(key => delete next[key]);
+      return next;
+    });
   };
 
   const updateItemQuantityUnit = (
-    productId: string,
+    lineId: string,
     qtyInputUnit: 'COMPOUND' | 'BASE',
   ) => {
     setItems(prev =>
       prev.map(item => {
-        if (item.productId !== productId) {
+        if (item.id !== lineId) {
           return item;
         }
         return { ...item, qtyInputUnit };
@@ -370,47 +474,117 @@ const CreateInvoiceScreen: React.FC<Props> = ({ navigation }) => {
     );
     setQuantityDrafts(prev => {
       const next = { ...prev };
-      delete next[productId];
+      delete next[lineId];
       return next;
     });
   };
 
-  const handleQuantityTextChange = (productId: string, text: string) => {
+  const handleQuantityTextChange = (lineId: string, text: string) => {
     if (!/^\d*\.?\d*$/.test(text)) {
       return;
     }
 
-    setQuantityDrafts(prev => ({ ...prev, [productId]: text }));
+    setQuantityDrafts(prev => ({ ...prev, [lineId]: text }));
     if (!text) {
       return;
     }
 
     const qty = Number.parseFloat(text);
     if (!Number.isNaN(qty) && qty > 0) {
-      updateQuantity(productId, qty, false);
+      updateQuantity(lineId, qty, false);
     }
   };
 
-  const handleQuantityBlur = (productId: string, currentQty: number) => {
-    const draft = quantityDrafts[productId];
+  const handleQuantityBlur = (lineId: string, currentQty: number) => {
+    const draft = quantityDrafts[lineId];
     if (draft === undefined) {
       return;
     }
 
     const qty = Number.parseFloat(draft);
     if (!draft || Number.isNaN(qty) || qty <= 0) {
-      updateQuantity(productId, currentQty, false);
+      updateQuantity(lineId, currentQty, false);
     } else {
-      updateQuantity(productId, qty);
+      updateQuantity(lineId, qty);
     }
 
     setQuantityDrafts(prev => {
       const next = { ...prev };
-      delete next[productId];
+      delete next[lineId];
       return next;
     });
   };
 
+  /* ---- free-text numeric line fields (rate, MRP, discount, free qty) ---- */
+
+  const draftKey = (lineId: string, fieldName: string) =>
+    `${lineId}:${fieldName}`;
+
+  const getFieldValue = (
+    item: InvoiceItem,
+    fieldName: 'sellingRate' | 'mrp' | 'discountPercent' | 'freeQty',
+  ) => {
+    const draft = fieldDrafts[draftKey(item.id, fieldName)];
+    if (draft !== undefined) return draft;
+    const value = item[fieldName];
+    return value === undefined || value === null ? '' : String(value);
+  };
+
+  const handleNumericFieldChange = (
+    lineId: string,
+    fieldName: 'sellingRate' | 'mrp' | 'discountPercent' | 'freeQty',
+    text: string,
+  ) => {
+    if (!/^\d*\.?\d*$/.test(text)) {
+      return;
+    }
+
+    setFieldDrafts(prev => ({ ...prev, [draftKey(lineId, fieldName)]: text }));
+
+    if (text === '' || text.endsWith('.')) {
+      return;
+    }
+
+    const parsed = Number.parseFloat(text);
+    if (Number.isNaN(parsed)) {
+      return;
+    }
+
+    if (fieldName === 'freeQty') {
+      updateFreeQuantity(lineId, parsed);
+    } else if (fieldName === 'sellingRate' || fieldName === 'mrp') {
+      updateLine(lineId, { [fieldName]: text } as Partial<InvoiceItem>);
+    } else {
+      updateLine(lineId, { discountPercent: Math.min(parsed, 100) });
+    }
+  };
+
+  const handleNumericFieldBlur = (
+    lineId: string,
+    fieldName: 'sellingRate' | 'mrp' | 'discountPercent' | 'freeQty',
+  ) => {
+    const key = draftKey(lineId, fieldName);
+    const draft = fieldDrafts[key];
+
+    if (draft !== undefined) {
+      const parsed = Number.parseFloat(draft);
+      const safeValue = Number.isNaN(parsed) ? 0 : parsed;
+
+      if (fieldName === 'freeQty') {
+        updateFreeQuantity(lineId, safeValue);
+      } else if (fieldName === 'sellingRate' || fieldName === 'mrp') {
+        updateLine(lineId, { [fieldName]: String(safeValue) } as Partial<InvoiceItem>);
+      } else {
+        updateLine(lineId, { discountPercent: Math.min(safeValue, 100) });
+      }
+    }
+
+    setFieldDrafts(prev => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
 
   const totals = calculateInvoiceTotals(items, form.discount, form.discountType);
   const isDueDateBeforeInvoiceDate = () => {
@@ -550,7 +724,7 @@ const CreateInvoiceScreen: React.FC<Props> = ({ navigation }) => {
             </View>
 
             {items.map((item, index) => (
-              <View key={item.productId}>
+              <View key={item.id}>
                 <View style={styles.itemRow}>
                   <View style={styles.itemInfo}>
                     <View style={styles.itemTopRow}>
@@ -565,7 +739,7 @@ const CreateInvoiceScreen: React.FC<Props> = ({ navigation }) => {
                       {item.unitType === 'COMPOUND' && (
                         <View style={styles.unitSwitchRow}>
                           <TouchableOpacity
-                            onPress={() => updateItemQuantityUnit(item.productId, 'COMPOUND')}
+                            onPress={() => updateItemQuantityUnit(item.id, 'COMPOUND')}
                             style={[
                               styles.unitOption,
                               item.qtyInputUnit === 'COMPOUND' && styles.unitOptionSelected,
@@ -574,13 +748,13 @@ const CreateInvoiceScreen: React.FC<Props> = ({ navigation }) => {
                             <View style={styles.unitCheckbox}>
                               <Checkbox
                                 status={item.qtyInputUnit === 'COMPOUND' ? 'checked' : 'unchecked'}
-                                onPress={() => updateItemQuantityUnit(item.productId, 'COMPOUND')}
+                                onPress={() => updateItemQuantityUnit(item.id, 'COMPOUND')}
                               />
                             </View>
                             <Text style={styles.unitOptionText}>{item.unit || 'Unit'}</Text>
                           </TouchableOpacity>
                           <TouchableOpacity
-                            onPress={() => updateItemQuantityUnit(item.productId, 'BASE')}
+                            onPress={() => updateItemQuantityUnit(item.id, 'BASE')}
                             style={[
                               styles.unitOption,
                               item.qtyInputUnit === 'BASE' && styles.unitOptionSelected,
@@ -589,7 +763,7 @@ const CreateInvoiceScreen: React.FC<Props> = ({ navigation }) => {
                             <View style={styles.unitCheckbox}>
                               <Checkbox
                                 status={item.qtyInputUnit === 'BASE' ? 'checked' : 'unchecked'}
-                                onPress={() => updateItemQuantityUnit(item.productId, 'BASE')}
+                                onPress={() => updateItemQuantityUnit(item.id, 'BASE')}
                               />
                             </View>
                             <Text style={styles.unitOptionText}>{item.baseUnit || 'Base'}</Text>
@@ -598,7 +772,7 @@ const CreateInvoiceScreen: React.FC<Props> = ({ navigation }) => {
                       )}
                     </View>
                     <Text variant="bodySmall" style={styles.itemDetails}>
-                      Rate: ₹{item.sellingRate} | Tax: {item.taxRate}%
+                      Tax: {item.taxRate}% | Taxable: ₹{item.taxableAmount?.toFixed(2)}
                     </Text>
                     <Text variant="bodySmall" style={styles.itemStockText}>
                       Available: {getMaxAllowedInputQuantity(item)} {getQuantityUnitLabel(item)}
@@ -610,6 +784,38 @@ const CreateInvoiceScreen: React.FC<Props> = ({ navigation }) => {
                     )}
                   </View>
 
+                  {showBatchFields && (
+                    <View style={styles.batchRow}>
+                      <TextInput
+                        mode="outlined"
+                        dense
+                        label="Batch No."
+                        autoCapitalize="characters"
+                        value={item.batchNo ?? ''}
+                        onChangeText={text =>
+                          updateLine(item.id, { batchNo: text.toUpperCase() })
+                        }
+                        style={styles.batchInput}
+                      />
+                      <TextInput
+                        mode="outlined"
+                        dense
+                        label="Expiry"
+                        value={item.expDate ?? ''}
+                        onChangeText={text => updateLine(item.id, { expDate: text })}
+                        style={styles.batchInput}
+                      />
+                      <TextInput
+                        mode="outlined"
+                        dense
+                        label="Mfg. By"
+                        value={item.mfgBy ?? ''}
+                        onChangeText={text => updateLine(item.id, { mfgBy: text })}
+                        style={styles.batchInputWide}
+                      />
+                    </View>
+                  )}
+
                   <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
@@ -620,7 +826,7 @@ const CreateInvoiceScreen: React.FC<Props> = ({ navigation }) => {
                         icon="minus"
                         size={18}
                         onPress={() =>
-                          updateQuantity(item.productId, item.quantity - 1)
+                          updateQuantity(item.id, getInputQuantity(item) - 1)
                         }
                       />
                       <TextInput
@@ -628,14 +834,14 @@ const CreateInvoiceScreen: React.FC<Props> = ({ navigation }) => {
                         dense
                         keyboardType="number-pad"
                         value={
-                          quantityDrafts[item.productId] ??
+                          quantityDrafts[item.id] ??
                           String(getInputQuantity(item))
                         }
                         onChangeText={text =>
-                          handleQuantityTextChange(item.productId, text)
+                          handleQuantityTextChange(item.id, text)
                         }
                         onBlur={() =>
-                          handleQuantityBlur(item.productId, item.quantity)
+                          handleQuantityBlur(item.id, getInputQuantity(item))
                         }
                         style={styles.quantityInput}
                         contentStyle={styles.quantityInputContent}
@@ -644,19 +850,91 @@ const CreateInvoiceScreen: React.FC<Props> = ({ navigation }) => {
                         icon="plus"
                         size={18}
                         onPress={() =>
-                          updateQuantity(item.productId, item.quantity + 1)
+                          updateQuantity(item.id, getInputQuantity(item) + 1)
                         }
                       />
                     </View>
 
-                    <View style={styles.metaCell}>
-                      <Text style={styles.metaLabel}>Rate</Text>
-                      <Text style={styles.metaValue}>₹{item.sellingRate}</Text>
+                    {showFreeQty && (
+                      <View style={styles.editCell}>
+                        <Text style={styles.metaLabel}>Free</Text>
+                        <TextInput
+                          mode="outlined"
+                          dense
+                          keyboardType="decimal-pad"
+                          value={getFieldValue(item, 'freeQty')}
+                          onChangeText={text =>
+                            handleNumericFieldChange(item.id, 'freeQty', text)
+                          }
+                          onBlur={() => handleNumericFieldBlur(item.id, 'freeQty')}
+                          style={styles.editInput}
+                          contentStyle={styles.editInputContent}
+                        />
+                      </View>
+                    )}
+
+                    <View style={styles.editCell}>
+                      <Text style={styles.metaLabel}>MRP</Text>
+                      <TextInput
+                        mode="outlined"
+                        dense
+                        keyboardType="decimal-pad"
+                        value={getFieldValue(item, 'mrp')}
+                        onChangeText={text =>
+                          handleNumericFieldChange(item.id, 'mrp', text)
+                        }
+                        onBlur={() => handleNumericFieldBlur(item.id, 'mrp')}
+                        style={styles.editInput}
+                        contentStyle={styles.editInputContent}
+                      />
                     </View>
+
+                    <View style={styles.editCell}>
+                      <Text style={styles.metaLabel}>Rate</Text>
+                      <TextInput
+                        mode="outlined"
+                        dense
+                        keyboardType="decimal-pad"
+                        value={getFieldValue(item, 'sellingRate')}
+                        onChangeText={text =>
+                          handleNumericFieldChange(item.id, 'sellingRate', text)
+                        }
+                        onBlur={() => handleNumericFieldBlur(item.id, 'sellingRate')}
+                        style={styles.editInput}
+                        contentStyle={styles.editInputContent}
+                      />
+                    </View>
+
+                    {showLineDiscount && (
+                    <View style={styles.editCell}>
+                      <Text style={styles.metaLabel}>Dis %</Text>
+                      <TextInput
+                        mode="outlined"
+                        dense
+                        keyboardType="decimal-pad"
+                        value={getFieldValue(item, 'discountPercent')}
+                        onChangeText={text =>
+                          handleNumericFieldChange(item.id, 'discountPercent', text)
+                        }
+                        onBlur={() => handleNumericFieldBlur(item.id, 'discountPercent')}
+                        style={styles.editInput}
+                        contentStyle={styles.editInputContent}
+                      />
+                    </View>
+                    )}
+
+                    {showLineDiscount && Number(item.discountPercent) > 0 && (
+                      <View style={styles.metaCell}>
+                        <Text style={styles.metaLabel}>Dis Amt / unit</Text>
+                        <Text style={styles.metaValue}>
+                          ₹{item.discountAmount?.toFixed(2)}
+                        </Text>
+                      </View>
+                    )}
 
                     <View style={styles.metaCell}>
                       <Text style={styles.metaLabel}>Tax</Text>
-                      <Text style={styles.metaValue}>₹{item.taxAmount}</Text>
+                      <Text style={styles.metaValue}>₹{item.taxAmount?.toFixed(2)}</Text>
                     </View>
 
                     <View style={styles.metaCell}>
@@ -668,7 +946,7 @@ const CreateInvoiceScreen: React.FC<Props> = ({ navigation }) => {
                       icon="delete"
                       iconColor="#d32f2f"
                       size={20}
-                      onPress={() => removeItem(item.productId)}
+                      onPress={() => removeItem(item.id)}
                     />
                   </ScrollView>
                 </View>
@@ -1044,7 +1322,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    minWidth: 520,
+    minWidth: 700,
     paddingRight: 4,
   },
   qtyControl: {
@@ -1055,6 +1333,33 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 2,
     backgroundColor: '#fafafa',
+  },
+  batchRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 4,
+  },
+  batchInput: {
+    flex: 1,
+    height: 42,
+    backgroundColor: '#fff',
+  },
+  batchInputWide: {
+    flex: 1.4,
+    height: 42,
+    backgroundColor: '#fff',
+  },
+  editCell: {
+    minWidth: 92,
+  },
+  editInput: {
+    height: 40,
+    backgroundColor: '#fff',
+  },
+  editInputContent: {
+    textAlign: 'right',
+    fontSize: 14,
+    fontWeight: '600',
   },
   metaCell: {
     minWidth: 100,

@@ -23,7 +23,10 @@ const PRODUCT_FIELDS = `
   conversion_factor,
   unit_type,
   min_stock,
-  hsn_code
+  hsn_code,
+  batch_no,
+  exp_date,
+  mfg_by
 `;
 
 const PRODUCT_SORT_COLUMNS = {
@@ -76,6 +79,9 @@ const productResponse = (product: any) => ({
   unit_type: product.unit_type,
   min_stock: product.min_stock,
   hsn_code: product.hsn_code,
+  batch_no: product.batch_no,
+  exp_date: product.exp_date,
+  mfg_by: product.mfg_by,
 });
 
 const buildProductFilters = (
@@ -156,14 +162,17 @@ export const createProduct = async (req: AuthRequest, res: Response) => {
       tax_percent,
       min_stock,
       hsn_code,
+      batch_no,
+      exp_date,
+      mfg_by,
     } = req.body;
     const user_id = req.user.id;
     const normalizedUnit = unit || "PCS";
     const normalizedBaseUnit = base_unit || base_Unit || normalizedUnit;
 
     const result = await pool.query(
-      `INSERT INTO products (user_id,name,description,selling_rate,stock,sku,unit,tax_percent,mrp,category,base_unit,conversion_factor,unit_type,min_stock,hsn_code)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+      `INSERT INTO products (user_id,name,description,selling_rate,stock,sku,unit,tax_percent,mrp,category,base_unit,conversion_factor,unit_type,min_stock,hsn_code,batch_no,exp_date,mfg_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
        RETURNING ${PRODUCT_FIELDS}`,
       [
         user_id,
@@ -181,6 +190,9 @@ export const createProduct = async (req: AuthRequest, res: Response) => {
         unit_type,
         min_stock,
         hsn_code,
+        batch_no,
+        exp_date,
+        mfg_by,
       ],
     );
 
@@ -281,6 +293,9 @@ export const updateProduct = async (req: AuthRequest, res: Response) => {
       conversion_factor,
       min_stock,
       hsn_code,
+      batch_no,
+      exp_date,
+      mfg_by,
     } = req.body;
     const user_id = req.user.id;
     const normalizedUnit = unit ?? null;
@@ -304,8 +319,11 @@ export const updateProduct = async (req: AuthRequest, res: Response) => {
         conversion_factor=COALESCE($12, conversion_factor),
         unit_type=COALESCE($13, unit_type),
         min_stock=COALESCE($14, min_stock),
-        hsn_code=COALESCE($15, hsn_code)
-      WHERE id=$16 AND user_id=$17
+        hsn_code=COALESCE($15, hsn_code),
+        batch_no=COALESCE($16, batch_no),
+        exp_date=COALESCE($17, exp_date),
+        mfg_by=COALESCE($18, mfg_by)
+      WHERE id=$19 AND user_id=$20
       RETURNING ${PRODUCT_FIELDS}
       `,
       [
@@ -324,6 +342,9 @@ export const updateProduct = async (req: AuthRequest, res: Response) => {
         unit_type,
         min_stock,
         hsn_code,
+        batch_no,
+        exp_date,
+        mfg_by,
         id,
         user_id,
       ],

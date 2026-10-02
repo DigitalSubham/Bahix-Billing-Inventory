@@ -26,6 +26,8 @@ import AppDropdownPicker from '../../components/common/Dropdown';
 import { CATEGORY_OPTIONS, TAX_RATES, UNIT_OPTIONS } from '../../constants/state';
 import { productValidateForm } from '../../utils/validation';
 import { compoundToSimple, simpleToCompound } from '../../utils/helper';
+import { useBusinessCategory } from '../../hooks/useBusinessCategory';
+import { hasItemField } from '../../constants/categoryFields';
 
 type AddProductScreenNavigationProp = NativeStackNavigationProp<
     RootStackParamList
@@ -61,6 +63,8 @@ const isProductQueryKey = (queryKey: readonly unknown[]) => {
 };
 
 const AddProductScreen: React.FC<Props> = ({ navigation, route }) => {
+    const businessCategory = useBusinessCategory();
+    const showBatchFields = hasItemField(businessCategory, 'batchNo');
     const isEditMode = route?.params?.productId !== undefined;
     const productId = route?.params?.productId;
 
@@ -86,6 +90,9 @@ const AddProductScreen: React.FC<Props> = ({ navigation, route }) => {
         baseUnit: 'PCS',
         conversionFactor: "1",
         unitType: 'SIMPLE',
+        batchNo: '',
+        expDate: '',
+        mfgBy: '',
     });
 
     const [errors, setErrors] = useState<ProductFormErrors>({});
@@ -111,6 +118,11 @@ const AddProductScreen: React.FC<Props> = ({ navigation, route }) => {
             base_unit: product.baseUnit,
             conversion_factor: Number.parseFloat(product.conversionFactor),
             unit_type: product.unitType,
+            min_stock: product.minStock,
+            hsn_code: product.hsnCode,
+            batch_no: product.batchNo,
+            exp_date: product.expDate,
+            mfg_by: product.mfgBy,
         }),
         onSuccess: () => {
             invalidateProductQueries();
@@ -131,6 +143,11 @@ const AddProductScreen: React.FC<Props> = ({ navigation, route }) => {
             base_unit: product.baseUnit,
             conversion_factor: Number.parseFloat(product.conversionFactor),
             unit_type: product.unitType,
+            min_stock: product.minStock,
+            hsn_code: product.hsnCode,
+            batch_no: product.batchNo,
+            exp_date: product.expDate,
+            mfg_by: product.mfgBy,
         }),
         onSuccess: (updatedProduct) => {
             // update single-product cache
@@ -173,6 +190,9 @@ const AddProductScreen: React.FC<Props> = ({ navigation, route }) => {
                 baseUnit: existingProduct.baseUnit || existingProduct.unit || 'PCS',
                 conversionFactor: String(existingProduct.conversionFactor || '1'),
                 unitType: existingProduct.unitType || 'SIMPLE',
+                batchNo: existingProduct.batchNo || '',
+                expDate: existingProduct.expDate || '',
+                mfgBy: existingProduct.mfgBy || '',
             });
         }
     }, [isEditMode, existingProduct]);
@@ -217,6 +237,10 @@ const AddProductScreen: React.FC<Props> = ({ navigation, route }) => {
             baseUnit: formData.baseUnit,
             conversionFactor: formData.conversionFactor,
             unitType: formData.unitType,
+            hsnCode: formData.hsnCode,
+            batchNo: formData.batchNo,
+            expDate: formData.expDate,
+            mfgBy: formData.mfgBy,
         };
 
         if (isEditMode) {
@@ -248,6 +272,9 @@ const AddProductScreen: React.FC<Props> = ({ navigation, route }) => {
                         baseUnit: 'PCS',
                         conversionFactor: "1",
                         unitType: 'SIMPLE',
+                        batchNo: '',
+                        expDate: '',
+                        mfgBy: '',
                     });
                     setErrors({});
                     navigation.goBack()
@@ -601,6 +628,47 @@ const AddProductScreen: React.FC<Props> = ({ navigation, route }) => {
                         <HelperText type="info">
                             HSN (Harmonized System of Nomenclature) code for GST
                         </HelperText>
+
+                        {showBatchFields && (
+                            <>
+                                <View style={styles.row}>
+                                    <View style={styles.halfWidth}>
+                                        <TextInput
+                                            label="Batch No."
+                                            value={formData.batchNo}
+                                            onChangeText={(text) => updateFormData('batchNo', text.toUpperCase())}
+                                            mode="outlined"
+                                            autoCapitalize="characters"
+                                            style={styles.input}
+                                            placeholder="e.g., A9JLZ026"
+                                        />
+                                    </View>
+
+                                    <View style={styles.halfWidth}>
+                                        <TextInput
+                                            label="Expiry"
+                                            value={formData.expDate}
+                                            onChangeText={(text) => updateFormData('expDate', text)}
+                                            mode="outlined"
+                                            style={styles.input}
+                                            placeholder="e.g., Apr-2029"
+                                        />
+                                    </View>
+                                </View>
+
+                                <TextInput
+                                    label="Manufactured By"
+                                    value={formData.mfgBy}
+                                    onChangeText={(text) => updateFormData('mfgBy', text)}
+                                    mode="outlined"
+                                    style={styles.input}
+                                    placeholder="e.g., MS PENTA L"
+                                />
+                                <HelperText type="info">
+                                    Used as the default on new invoice lines; editable per line.
+                                </HelperText>
+                            </>
+                        )}
                     </Card.Content>
                 </Card>
 

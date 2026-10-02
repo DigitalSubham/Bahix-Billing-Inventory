@@ -11,4 +11,8 @@ export const updateProfileSchema = z.object({
   account_no: z.string().optional().nullable(),
   ifsc: z.string().optional(),
   upi_id: z.string().optional(),
+  business_category: z.enum(["GENERAL", "PHARMA"]).optional(),
+  fssai_no: z.string().optional().nullable(),
+  dl_no: z.string().optional().nullable(),
+  jurisdiction: z.string().optional().nullable(),
 });
